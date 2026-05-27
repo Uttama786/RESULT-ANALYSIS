@@ -34,5 +34,8 @@ COPY backend/ /app/backend/
 # Expose the port (Render uses $PORT, we default to 8000)
 EXPOSE 8000
 
+# Set work directory to backend so local imports resolve correctly
+WORKDIR /app/backend
+
 # Command to run the application (Render will dynamically pass the PORT env var)
-CMD ["sh", "-c", "uvicorn backend.app:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["sh", "-c", "uvicorn app:app --host 0.0.0.0 --port ${PORT:-8000}"]
