@@ -1,0 +1,1200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VTU Result Analysis & Crawling Hub</title>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS with custom styling properties -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        darkBg: '#090a0f',
+                        glassBg: 'rgba(15, 17, 26, 0.7)',
+                        glassBorder: 'rgba(255, 255, 255, 0.08)',
+                        brandPrimary: '#6366f1', // Indigo
+                        brandSecondary: '#8b5cf6', // Violet
+                        brandCyan: '#06b6d4', // Cyan
+                        brandGreen: '#10b981', // Emerald
+                        brandRed: '#f43f5e', // Rose
+                        brandOrange: '#f97316', // Orange
+                    },
+                    fontFamily: {
+                        sans: ['Outfit', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Custom CSS styles for premium glassmorphism and animations -->
+    <style>
+        body {
+            background-color: #090a0f;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(139, 92, 246, 0.15) 0px, transparent 50%);
+            background-attachment: fixed;
+            color: #f3f4f6;
+            font-family: 'Outfit', sans-serif;
+            min-height: 100vh;
+        }
+
+        .glass-panel {
+            background: rgba(15, 18, 30, 0.65);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        .glass-panel-heavy {
+            background: rgba(10, 12, 20, 0.9);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 16px 48px 0 rgba(0, 0, 0, 0.6);
+        }
+
+        .text-glow {
+            text-shadow: 0 0 15px rgba(99, 102, 241, 0.5);
+        }
+
+        .button-glow:hover {
+            box-shadow: 0 0 20px rgba(139, 92, 246, 0.6);
+            transform: translateY(-1px);
+        }
+
+        /* Customize Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 17, 26, 0.3);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(99, 102, 241, 0.3);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(99, 102, 241, 0.5);
+        }
+
+        /* Pulsing/Breathing Animations */
+        @keyframes breathe {
+            0%, 100% { opacity: 0.4; transform: scale(1); }
+            50% { opacity: 0.8; transform: scale(1.05); }
+        }
+        .breathing-glow {
+            animation: breathe 3s infinite ease-in-out;
+        }
+
+        @keyframes pulse-border {
+            0%, 100% { border-color: rgba(99, 102, 241, 0.3); }
+            50% { border-color: rgba(139, 92, 246, 0.8); }
+        }
+        .pulsing-border {
+            animation: pulse-border 2.5s infinite ease-in-out;
+        }
+    </style>
+
+    <!-- React and ReactDOM production CDNs -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    
+    <!-- Babel Standalone compiler CDN for dynamic JSX processing -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- ApexCharts CDN for stunning analytical visualizations -->
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+</head>
+<body class="py-6 px-4 md:px-8">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // --- Core UI Components ---
+
+        // Custom Header with breething connection status indicator
+        const Header = ({ status }) => {
+            let statusColor = "bg-yellow-500 shadow-[0_0_10px_#eab308]";
+            let statusText = "Ready";
+            
+            if (status === "scraping") {
+                statusColor = "bg-brandCyan shadow-[0_0_10px_#06b6d4] animate-pulse";
+                statusText = "Scraping Live...";
+            } else if (status === "completed") {
+                statusColor = "bg-brandGreen shadow-[0_0_10px_#10b981]";
+                statusText = "Analysis Done";
+            } else if (status === "error") {
+                statusColor = "bg-brandRed shadow-[0_0_10px_#f43f5e]";
+                statusText = "Failed";
+            }
+
+            return (
+                <header class="w-full flex flex-col md:flex-row items-center justify-between p-6 mb-8 glass-panel rounded-2xl">
+                    <div class="flex items-center gap-4">
+                        <div class="p-3 bg-brandPrimary/10 rounded-xl border border-brandPrimary/20">
+                            <svg class="w-8 h-8 text-brandPrimary" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 002 2h2a2 2 0 002-2z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h1 class="text-2xl font-extrabold tracking-tight bg-gradient-to-r from-brandPrimary via-brandSecondary to-brandCyan bg-clip-text text-transparent text-glow">
+                                VTU RESULT ANALYSIS TOOL
+                            </h1>
+                            <p class="text-xs text-gray-400 font-medium">Visual Scraping Engine & Academic Performance Dashboard</p>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4 md:mt-0 flex items-center gap-3 px-4 py-2 bg-white/5 rounded-full border border-white/5">
+                        <span class={`w-2.5 h-2.5 rounded-full ${statusColor}`}></span>
+                        <span class="text-xs font-semibold uppercase tracking-wider text-gray-300">{statusText}</span>
+                    </div>
+                </header>
+            );
+        };
+
+        // Retro glowing terminal log console
+        const TerminalConsole = ({ logs }) => {
+            const bottomRef = useRef(null);
+
+            useEffect(() => {
+                bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+            }, [logs]);
+
+            return (
+                <div class="flex flex-col h-full min-h-[300px] max-h-[380px] glass-panel rounded-2xl overflow-hidden border border-white/5">
+                    <div class="flex items-center justify-between px-4 py-2.5 bg-black/40 border-b border-white/5">
+                        <div class="flex items-center gap-1.5">
+                            <span class="w-3 h-3 rounded-full bg-brandRed/60"></span>
+                            <span class="w-3 h-3 rounded-full bg-brandOrange/60"></span>
+                            <span class="w-3 h-3 rounded-full bg-brandGreen/60"></span>
+                        </div>
+                        <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest font-mono">Console Logs</span>
+                        <span class="text-[10px] font-semibold text-brandPrimary/80 font-mono">v1.0.0</span>
+                    </div>
+                    <div class="flex-1 p-4 bg-black/30 overflow-y-auto font-mono text-xs text-brandCyan/90 leading-relaxed scrollbar-thin">
+                        {logs.map((log, index) => (
+                            <div key={index} class="mb-1.5 flex gap-2">
+                                <span class="text-brandSecondary font-bold select-none">&gt;</span>
+                                <span class="break-all">{log}</span>
+                            </div>
+                        ))}
+                        {logs.length === 0 && (
+                            <div class="text-gray-500 italic text-center py-12">Scraping log activity is currently idle. Press Crawl to initiate.</div>
+                        )}
+                        <div ref={bottomRef} />
+                    </div>
+                </div>
+            );
+        };
+
+        // ApexCharts React hooks wrapper for subject comparison
+        const SubjectAnalyticsChart = ({ subjectData }) => {
+            const chartContainerRef = useRef(null);
+
+            useEffect(() => {
+                if (!chartContainerRef.current || !subjectData || subjectData.length === 0) return;
+
+                const categories = subjectData.map(s => s.code);
+                const passPercentages = subjectData.map(s => s.pass_percentage);
+                const averageScores = subjectData.map(s => s.average_marks);
+
+                const options = {
+                    series: [
+                        {
+                            name: 'Pass Percentage (%)',
+                            type: 'column',
+                            data: passPercentages
+                        },
+                        {
+                            name: 'Average Score (Marks)',
+                            type: 'line',
+                            data: averageScores
+                        }
+                    ],
+                    chart: {
+                        height: 350,
+                        type: 'line',
+                        background: 'transparent',
+                        toolbar: { show: false }
+                    },
+                    theme: { mode: 'dark' },
+                    stroke: {
+                        width: [0, 3],
+                        curve: 'smooth'
+                    },
+                    colors: ['#6366f1', '#06b6d4'],
+                    fill: {
+                        opacity: [0.85, 1],
+                        gradient: {
+                            inverseColors: false,
+                            shade: 'dark',
+                            type: "vertical",
+                            opacityFrom: 0.85,
+                            opacityTo: 0.55,
+                        }
+                    },
+                    labels: categories,
+                    xaxis: {
+                        type: 'category',
+                        labels: { style: { colors: '#9ca3af', fontFamily: 'Outfit' } }
+                    },
+                    yaxis: [
+                        {
+                            title: {
+                                text: 'Pass Percentage (%)',
+                                style: { color: '#6366f1', fontFamily: 'Outfit' }
+                            },
+                            labels: {
+                                style: { colors: '#9ca3af' },
+                                formatter: (val) => `${val}%`
+                            },
+                            min: 0,
+                            max: 100
+                        },
+                        {
+                            opposite: true,
+                            title: {
+                                text: 'Average Score',
+                                style: { color: '#06b6d4', fontFamily: 'Outfit' }
+                            },
+                            labels: { style: { colors: '#9ca3af' } },
+                            min: 0,
+                            max: 100
+                        }
+                    ],
+                    grid: { borderColor: 'rgba(255,255,255,0.06)' },
+                    tooltip: {
+                        theme: 'dark',
+                        shared: true,
+                        intersect: false,
+                        y: {
+                            formatter: function (y) {
+                                if (typeof y !== "undefined") {
+                                    return y.toFixed(1);
+                                }
+                                return y;
+                            }
+                        }
+                    },
+                    legend: {
+                        fontFamily: 'Outfit',
+                        labels: { colors: '#e5e7eb' }
+                    }
+                };
+
+                const chart = new ApexCharts(chartContainerRef.current, options);
+                chart.render();
+
+                return () => chart.destroy();
+            }, [subjectData]);
+
+            return <div ref={chartContainerRef} />;
+        };
+
+        // Donut Chart for Pass / Fail ratio
+        const PassFailDonutChart = ({ summary }) => {
+            const containerRef = useRef(null);
+
+            useEffect(() => {
+                if (!containerRef.current || !summary) return;
+
+                const options = {
+                    series: [summary.passed_count, summary.failed_count],
+                    chart: {
+                        type: 'donut',
+                        height: 250,
+                        background: 'transparent'
+                    },
+                    labels: ['Passed', 'Failed'],
+                    colors: ['#10b981', '#f43f5e'],
+                    theme: { mode: 'dark' },
+                    stroke: { show: false },
+                    plotOptions: {
+                        pie: {
+                            donut: {
+                                size: '70%',
+                                labels: {
+                                    show: true,
+                                    name: { fontFamily: 'Outfit', color: '#e5e7eb' },
+                                    value: {
+                                        fontFamily: 'Outfit',
+                                        color: '#ffffff',
+                                        fontSize: '22px',
+                                        fontWeight: '800',
+                                        formatter: (val) => val
+                                    },
+                                    total: {
+                                        show: true,
+                                        label: 'Total',
+                                        fontFamily: 'Outfit',
+                                        color: '#9ca3af',
+                                        formatter: () => summary.total_students
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    dataLabels: { show: false },
+                    legend: {
+                        position: 'bottom',
+                        fontFamily: 'Outfit',
+                        labels: { colors: '#e5e7eb' }
+                    },
+                    tooltip: { theme: 'dark' }
+                };
+
+                const chart = new ApexCharts(containerRef.current, options);
+                chart.render();
+
+                return () => chart.destroy();
+            }, [summary]);
+
+            return <div ref={containerRef} />;
+        };
+
+        // --- Main App Component ---
+        const App = () => {
+            // State configs
+            const [portalUrl, setPortalUrl] = useState("https://results.vtu.ac.in/");
+            const [useSimulation, setUseSimulation] = useState(false);
+            const [inputMode, setInputMode] = useState("range"); // range vs list
+            const [startUsn, setStartUsn] = useState("");
+            const [endUsn, setEndUsn] = useState("");
+            const [usnList, setUsnList] = useState("");
+
+            // --- College Smart USN Builder state ---
+            // 4DM College: Year suffix 25=1st yr, 24=2nd yr, 23=3rd yr, 22=4th yr
+            // Branches: CS, IS, AI, EC, EE
+            const COLLEGE_BRANCHES = [
+                { label: "CSE",  code: "CS",  color: "from-indigo-500 to-blue-500" },
+                { label: "ISE",  code: "IS",  color: "from-violet-500 to-purple-500" },
+                { label: "AIML", code: "AI",  color: "from-cyan-500 to-teal-500" },
+                { label: "EC",   code: "EC",  color: "from-emerald-500 to-green-500" },
+                { label: "EEE",  code: "EE",  color: "from-orange-500 to-amber-500" },
+            ];
+            const COLLEGE_YEARS = [
+                { label: "1st Year", year: "25", badge: "2025" },
+                { label: "2nd Year", year: "24", badge: "2024" },
+                { label: "3rd Year", year: "23", badge: "2023" },
+                { label: "4th Year", year: "22", badge: "2022" },
+            ];
+            const [builderYear, setBuilderYear] = useState("23");
+            const [builderBranch, setBuilderBranch] = useState("CS");
+            const [builderFrom, setBuilderFrom] = useState("001");
+            const [builderTo, setBuilderTo] = useState("060");
+
+            const applyCollegeBuilder = () => {
+                const prefix = `4DM${builderYear}${builderBranch}`;
+                const pad = (n) => String(parseInt(n) || 1).padStart(3, "0");
+                setStartUsn(`${prefix}${pad(builderFrom)}`);
+                setEndUsn(`${prefix}${pad(builderTo)}`);
+                setInputMode("range");
+            };
+
+            // System running states
+            const [scrapingStatus, setScrapingStatus] = useState("idle"); // idle, scraping, completed, error
+            const [logs, setLogs] = useState([]);
+            const [progress, setProgress] = useState({ current: 0, total: 0, usn: "" });
+            const [scrapedResults, setScrapedResults] = useState([]);
+            const [captchaRequired, setCaptchaRequired] = useState(null); // { usn, captchaImg, attempt }
+            const [captchaCode, setCaptchaCode] = useState("");
+            const [sessionID, setSessionID] = useState("");
+            const [analysisResults, setAnalysisResults] = useState(null);
+            
+            // UI tab navigation
+            const [activeTab, setActiveTab] = useState("directory"); // directory, subjects, toppers, backlogs
+            const [searchTerm, setSearchTerm] = useState("");
+            const [statusFilter, setStatusFilter] = useState("ALL");
+
+            const wsRef = useRef(null);
+            const captchaInputRef = useRef(null);
+
+            // Auto-focus captcha entry field when it loads
+            useEffect(() => {
+                if (captchaRequired && captchaInputRef.current) {
+                    captchaInputRef.current.focus();
+                }
+            }, [captchaRequired]);
+
+            // Add starting log
+            useEffect(() => {
+                setLogs(["Result Scraping Portal is loaded and ready. Configure params and execute."]);
+            }, []);
+
+            // Start Scraper connection
+            const handleStartScrape = () => {
+                // Input validation
+                if (inputMode === "range" && (!startUsn || !endUsn)) {
+                    alert("Please input starting and ending USN numbers.");
+                    return;
+                }
+                if (inputMode === "list" && !usnList) {
+                    alert("Please input one or more comma-separated USNs.");
+                    return;
+                }
+
+                // Reset states
+                setScrapedResults([]);
+                setAnalysisResults(null);
+                setCaptchaRequired(null);
+                setProgress({ current: 0, total: 0, usn: "" });
+                setScrapingStatus("scraping");
+                
+                const uuidSession = "sess-" + Math.random().toString(36).substring(2, 15);
+                setSessionID(uuidSession);
+                setLogs(prev => [...prev, `[INIT] Generating new crawling session: ${uuidSession}`, `Connecting to scraper server...`]);
+
+                // Open WebSocket
+                const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+                const wsUrl = `${protocol}//${window.location.host}/ws/scrape/${uuidSession}`;
+                
+                const ws = new WebSocket(wsUrl);
+                wsRef.current = ws;
+
+                ws.onopen = () => {
+                    setLogs(prev => [...prev, `[SERVER] Connection established successfully.`]);
+                    // Send configs
+                    const configPayload = {
+                        start_usn: inputMode === "range" ? startUsn : "",
+                        end_usn: inputMode === "range" ? endUsn : "",
+                        usn_list: inputMode === "list" ? usnList : "",
+                        portal_url: portalUrl,
+                        use_simulation: useSimulation
+                    };
+                    ws.send(JSON.stringify(configPayload));
+                };
+
+                ws.onmessage = (event) => {
+                    const msg = JSON.parse(event.data);
+                    
+                    if (msg.type === "log") {
+                        setLogs(prev => [...prev, msg.message]);
+                    } 
+                    else if (msg.type === "status_update") {
+                        setProgress({
+                            current: msg.current,
+                            total: msg.total,
+                            usn: msg.usn
+                        });
+                        setLogs(prev => [...prev, `[SCRAPING] Loading results for ${msg.usn} (${msg.current}/${msg.total})`]);
+                    }
+                    else if (msg.type === "captcha_required") {
+                        setLogs(prev => [...prev, `[CAPTCHA] Solver request for USN: ${msg.usn} (Attempt #${msg.attempt})`]);
+                        setCaptchaRequired({
+                            usn: msg.usn,
+                            captchaImg: msg.captcha_img,
+                            attempt: msg.attempt
+                        });
+                        setCaptchaCode("");
+                    }
+                    else if (msg.type === "progress") {
+                        // Reset captcha modal if open
+                        setCaptchaRequired(null);
+                        
+                        if (msg.status === "SUCCESS") {
+                            setScrapedResults(prev => [...prev, msg.data]);
+                        }
+                        setLogs(prev => [...prev, msg.message]);
+                    }
+                    else if (msg.type === "completed") {
+                        setScrapingStatus("completed");
+                        setCaptchaRequired(null);
+                        
+                        if (msg.error) {
+                            setLogs(prev => [...prev, `❌ ERROR: ${msg.error}`]);
+                            setScrapingStatus("error");
+                        } else {
+                            setLogs(prev => [...prev, msg.message]);
+                            setAnalysisResults(msg.analysis);
+                        }
+                        ws.close();
+                    }
+                    else if (msg.type === "error") {
+                        setLogs(prev => [...prev, `❌ FATAL ERROR: ${msg.message}`]);
+                        setScrapingStatus("error");
+                        setCaptchaRequired(null);
+                        ws.close();
+                    }
+                };
+
+                ws.onerror = (err) => {
+                    setLogs(prev => [...prev, `[ERROR] Connection failed. Scraper server may be offline.`]);
+                    setScrapingStatus("error");
+                };
+
+                ws.onclose = () => {
+                    logger.info("WebSocket connection closed.");
+                };
+            };
+
+            // Submit Captcha response
+            const handleCaptchaSubmit = (e) => {
+                if (e) e.preventDefault();
+                if (!captchaCode) return;
+                
+                if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+                    setLogs(prev => [...prev, `Submitting captcha code: "${captchaCode}"...`]);
+                    wsRef.current.send(JSON.stringify({ captcha_code: captchaCode }));
+                    setCaptchaRequired(null); // Close modal
+                }
+            };
+
+            // Stop Scraper connection
+            const handleStopScrape = () => {
+                if (wsRef.current) {
+                    wsRef.current.close();
+                    setLogs(prev => [...prev, `⚠️ Scraper session cancelled by user.`]);
+                    setScrapingStatus("idle");
+                    setCaptchaRequired(null);
+                }
+            };
+
+            // Filter data rows in Student Directory Tab
+            const filteredResults = scrapedResults.filter(student => {
+                const matchesSearch = student.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                                     student.usn.toLowerCase().includes(searchTerm.toLowerCase());
+                
+                if (statusFilter === "ALL") return matchesSearch;
+                if (statusFilter === "PASS") return matchesSearch && "FAIL" !== student.status;
+                if (statusFilter === "FAIL") return matchesSearch && "FAIL" === student.status;
+                
+                // Specific class filters
+                return matchesSearch && student.status.includes(statusFilter);
+            });
+
+            return (
+                <div class="max-w-7xl mx-auto pb-16">
+                    <Header status={scrapingStatus} />
+                    
+                    {/* Captcha Modal Overlay */}
+                    {captchaRequired && (
+                        <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
+                            <div class="w-full max-w-md glass-panel-heavy p-6 rounded-3xl pulsing-border border text-center shadow-2xl">
+                                <span class="inline-block px-3 py-1 bg-brandPrimary/10 border border-brandPrimary/20 rounded-full text-brandPrimary text-xs font-bold uppercase tracking-wider mb-2">
+                                    Captcha Required
+                                </span>
+                                <h3 class="text-xl font-bold text-white mb-1">Verify Seat Number</h3>
+                                <p class="text-xs text-gray-400 mb-6">Solving captcha for student USN: <span class="text-brandCyan font-mono font-bold">{captchaRequired.usn}</span></p>
+                                
+                                <div class="flex flex-col items-center gap-4 p-4 bg-white/5 rounded-2xl border border-white/5 mb-6">
+                                    <div class="relative bg-white p-2.5 rounded-xl border border-white/10 shadow-inner">
+                                        <img src={captchaRequired.captchaImg} alt="CAPTCHA Code" class="h-12 w-auto object-contain rounded" />
+                                    </div>
+                                    <p class="text-[10px] text-brandSecondary font-medium">Attempt #{captchaRequired.attempt} of 4</p>
+                                </div>
+                                
+                                <form onSubmit={handleCaptchaSubmit} class="flex flex-col gap-4">
+                                    <input 
+                                        ref={captchaInputRef}
+                                        type="text" 
+                                        value={captchaCode}
+                                        onChange={(e) => setCaptchaCode(e.target.value)}
+                                        placeholder="Type characters here..."
+                                        maxlength="6"
+                                        class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-center text-lg font-bold font-mono tracking-widest text-white focus:outline-none focus:border-brandSecondary"
+                                        required
+                                    />
+                                    <div class="flex gap-3">
+                                        <button 
+                                            type="button"
+                                            onClick={handleStopScrape}
+                                            class="flex-1 px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl text-gray-300 text-sm font-semibold transition"
+                                        >
+                                            Abort Job
+                                        </button>
+                                        <button 
+                                            type="submit"
+                                            class="flex-1 px-4 py-2.5 bg-gradient-to-r from-brandPrimary to-brandSecondary hover:opacity-90 rounded-xl text-white text-sm font-semibold transition button-glow shadow-lg shadow-brandPrimary/20"
+                                        >
+                                            Submit Code
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Main Scrape Settings & Terminal Grid */}
+                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-8">
+                        {/* Config Panel */}
+                        <div class="lg:col-span-5 glass-panel p-6 rounded-2xl flex flex-col justify-between">
+                            <div>
+                                <h3 class="text-lg font-bold text-white mb-5 flex items-center gap-2">
+                                    <svg class="w-5 h-5 text-brandPrimary" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    </svg>
+                                    CRAWLER CONFIGURATIONS
+                                </h3>
+                                
+                                {/* URL Portal */}
+                                <div class="mb-4">
+                                    <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">VTU Results Target URL</label>
+                                    <input 
+                                        type="url" 
+                                        value={portalUrl}
+                                        onChange={(e) => setPortalUrl(e.target.value)}
+                                        disabled={scrapingStatus === "scraping"}
+                                        class="w-full bg-black/30 border border-white/5 focus:border-brandPrimary focus:outline-none rounded-xl px-4 py-2.5 text-sm text-gray-300 font-mono"
+                                    />
+                                </div>
+                                
+                                {/* Scraper Mode */}
+                                <div class="grid grid-cols-2 gap-4 mb-4">
+                                    <div>
+                                        <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Scraping Engine</label>
+                                        <button 
+                                            type="button"
+                                            onClick={() => setUseSimulation(!useSimulation)}
+                                            disabled={scrapingStatus === "scraping"}
+                                            class={`w-full py-2.5 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-2 ${useSimulation ? 'bg-brandSecondary/10 border-brandSecondary/30 text-brandSecondary' : 'bg-brandCyan/10 border-brandCyan/30 text-brandCyan'}`}
+                                        >
+                                            <span class={`w-2 h-2 rounded-full ${useSimulation ? 'bg-brandSecondary animate-pulse' : 'bg-brandCyan animate-pulse'}`}></span>
+                                            {useSimulation ? 'SIMULATION MODE' : 'LIVE CRAWLER'}
+                                        </button>
+                                        {useSimulation && (
+                                            <p class="text-[10px] text-brandSecondary/70 mt-1.5 text-center font-medium">
+                                                ⚡ Captcha auto-resolved — no user input needed
+                                            </p>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Input Mode</label>
+                                        <div class="flex rounded-xl bg-black/40 border border-white/5 p-0.5">
+                                            <button 
+                                                type="button" 
+                                                onClick={() => setInputMode("range")}
+                                                disabled={scrapingStatus === "scraping"}
+                                                class={`flex-1 py-2 text-center text-xs font-bold rounded-lg transition ${inputMode === "range" ? 'bg-brandPrimary text-white shadow' : 'text-gray-400 hover:text-white'}`}
+                                            >
+                                                USN Range
+                                            </button>
+                                            <button 
+                                                type="button" 
+                                                onClick={() => setInputMode("list")}
+                                                disabled={scrapingStatus === "scraping"}
+                                                class={`flex-1 py-2 text-center text-xs font-bold rounded-lg transition ${inputMode === "list" ? 'bg-brandPrimary text-white shadow' : 'text-gray-400 hover:text-white'}`}
+                                            >
+                                                USN List
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <hr class="border-white/5 mb-4" />
+
+                                {/* ===== COLLEGE SMART USN BUILDER ===== */}
+                                <div class="mb-4 rounded-xl border border-indigo-500/20 bg-gradient-to-br from-indigo-950/40 to-violet-950/40 overflow-hidden">
+                                    {/* Header */}
+                                    <div class="flex items-center gap-2 px-3.5 py-2.5 border-b border-indigo-500/15 bg-black/20">
+                                        <span class="text-base">🏫</span>
+                                        <span class="text-xs font-bold text-indigo-300 tracking-wider uppercase">4DM College Quick Builder</span>
+                                        <span class="ml-auto text-[10px] text-indigo-400/60 font-mono">Auto-fill USN Range</span>
+                                    </div>
+                                    <div class="p-3.5 space-y-3">
+                                        {/* Year selector */}
+                                        <div>
+                                            <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">Year of Study</p>
+                                            <div class="grid grid-cols-4 gap-1.5">
+                                                {COLLEGE_YEARS.map(y => (
+                                                    <button
+                                                        key={y.year}
+                                                        type="button"
+                                                        onClick={() => setBuilderYear(y.year)}
+                                                        disabled={scrapingStatus === "scraping"}
+                                                        class={`py-1.5 rounded-lg text-[11px] font-bold transition border ${
+                                                            builderYear === y.year
+                                                                ? 'bg-indigo-500/20 border-indigo-400/50 text-indigo-200'
+                                                                : 'bg-black/20 border-white/5 text-gray-500 hover:text-gray-300 hover:border-white/15'
+                                                        }`}
+                                                    >
+                                                        {y.label}
+                                                        <div class="text-[9px] opacity-60 font-normal">{y.badge}</div>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        {/* Branch selector */}
+                                        <div>
+                                            <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">Branch</p>
+                                            <div class="flex flex-wrap gap-1.5">
+                                                {COLLEGE_BRANCHES.map(b => (
+                                                    <button
+                                                        key={b.code}
+                                                        type="button"
+                                                        onClick={() => setBuilderBranch(b.code)}
+                                                        disabled={scrapingStatus === "scraping"}
+                                                        class={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition border ${
+                                                            builderBranch === b.code
+                                                                ? `bg-gradient-to-r ${b.color} border-transparent text-white shadow-sm`
+                                                                : 'bg-black/20 border-white/5 text-gray-500 hover:text-gray-300 hover:border-white/15'
+                                                        }`}
+                                                    >
+                                                        {b.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        {/* From / To number range */}
+                                        <div class="grid grid-cols-2 gap-2">
+                                            <div>
+                                                <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">From #</p>
+                                                <input
+                                                    type="number" min="1" max="999"
+                                                    value={parseInt(builderFrom)}
+                                                    onChange={e => setBuilderFrom(String(e.target.value).padStart(3,"0"))}
+                                                    disabled={scrapingStatus === "scraping"}
+                                                    class="w-full bg-black/30 border border-white/5 focus:border-indigo-400 focus:outline-none rounded-lg px-3 py-1.5 text-sm text-white font-mono text-center"
+                                                />
+                                            </div>
+                                            <div>
+                                                <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">To #</p>
+                                                <input
+                                                    type="number" min="1" max="999"
+                                                    value={parseInt(builderTo)}
+                                                    onChange={e => setBuilderTo(String(e.target.value).padStart(3,"0"))}
+                                                    disabled={scrapingStatus === "scraping"}
+                                                    class="w-full bg-black/30 border border-white/5 focus:border-indigo-400 focus:outline-none rounded-lg px-3 py-1.5 text-sm text-white font-mono text-center"
+                                                />
+                                            </div>
+                                        </div>
+                                        {/* Preview + Apply */}
+                                        <div class="flex items-center gap-2">
+                                            <div class="flex-1 bg-black/40 rounded-lg px-3 py-2 border border-white/5">
+                                                <p class="text-[9px] text-gray-600 uppercase tracking-wider mb-0.5">Preview</p>
+                                                <p class="text-xs font-mono text-indigo-300 font-bold">
+                                                    4DM{builderYear}{builderBranch}{String(parseInt(builderFrom)||1).padStart(3,'0')}
+                                                    <span class="text-gray-600 mx-1">→</span>
+                                                    4DM{builderYear}{builderBranch}{String(parseInt(builderTo)||1).padStart(3,'0')}
+                                                    <span class="text-gray-600 ml-2">({Math.max(0, (parseInt(builderTo)||1)-(parseInt(builderFrom)||1)+1)} students)</span>
+                                                </p>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={applyCollegeBuilder}
+                                                disabled={scrapingStatus === "scraping"}
+                                                class="px-4 py-2 bg-gradient-to-r from-indigo-600 to-violet-600 rounded-lg text-xs font-bold text-white hover:from-indigo-500 hover:to-violet-500 transition shadow-md whitespace-nowrap"
+                                            >
+                                                ✓ Apply
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* USN range inputs */}
+                                {inputMode === "range" ? (
+                                    <div class="grid grid-cols-2 gap-4 mb-4">
+                                        <div>
+                                            <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Starting USN</label>
+                                            <input 
+                                                type="text" 
+                                                placeholder="e.g. 1SG21CS001"
+                                                value={startUsn}
+                                                onChange={(e) => setStartUsn(e.target.value.toUpperCase())}
+                                                disabled={scrapingStatus === "scraping"}
+                                                class="w-full bg-black/30 border border-white/5 focus:border-brandPrimary focus:outline-none rounded-xl px-4 py-2.5 text-sm text-white font-mono uppercase text-center"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Ending USN</label>
+                                            <input 
+                                                type="text" 
+                                                placeholder="e.g. 1SG21CS020"
+                                                value={endUsn}
+                                                onChange={(e) => setEndUsn(e.target.value.toUpperCase())}
+                                                disabled={scrapingStatus === "scraping"}
+                                                class="w-full bg-black/30 border border-white/5 focus:border-brandPrimary focus:outline-none rounded-xl px-4 py-2.5 text-sm text-white font-mono uppercase text-center"
+                                            />
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div class="mb-4">
+                                        <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Multiple USNs (Comma Separated)</label>
+                                        <textarea 
+                                            placeholder="1SG21CS001, 1SG21CS005, 1SG21CS010"
+                                            value={usnList}
+                                            onChange={(e) => setUsnList(e.target.value.toUpperCase())}
+                                            disabled={scrapingStatus === "scraping"}
+                                            rows="3"
+                                            class="w-full bg-black/30 border border-white/5 focus:border-brandPrimary focus:outline-none rounded-xl px-4 py-2.5 text-sm text-white font-mono uppercase scrollbar-thin resize-none"
+                                        />
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Crawl Control CTAs */}
+                            <div class="mt-8">
+                                {scrapingStatus === "scraping" ? (
+                                    <button 
+                                        type="button" 
+                                        onClick={handleStopScrape}
+                                        class="w-full bg-gradient-to-r from-brandRed to-brandOrange rounded-xl py-3.5 text-sm font-bold text-white tracking-wider flex items-center justify-center gap-2 button-glow shadow-lg shadow-brandRed/20"
+                                    >
+                                        <svg class="w-5 h-5 animate-spin text-white" fill="none" viewBox="0 0 24 24">
+                                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        ABORT ACTIVE CRAWL
+                                    </button>
+                                ) : (
+                                    <button 
+                                        type="button" 
+                                        onClick={handleStartScrape}
+                                        class="w-full bg-gradient-to-r from-brandPrimary via-brandSecondary to-brandCyan rounded-xl py-3.5 text-sm font-bold text-white tracking-wider flex items-center justify-center gap-2 button-glow shadow-lg shadow-brandPrimary/30 text-glow"
+                                    >
+                                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                        </svg>
+                                        INITIATE RESULT CRAWLING
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Logs and live Progress Panel */}
+                        <div class="lg:col-span-7 flex flex-col gap-6">
+                            {/* Live progress indicator */}
+                            {scrapingStatus === "scraping" && (
+                                <div class="glass-panel p-5 rounded-2xl">
+                                    <div class="flex items-center justify-between text-xs font-bold uppercase tracking-wider mb-2.5">
+                                        <span class="text-brandCyan font-mono">Current USN: {progress.usn || "Preparing..."}</span>
+                                        <span class="text-white">Processed: {progress.current} / {progress.total}</span>
+                                    </div>
+                                    <div class="w-full h-3 bg-black/60 rounded-full border border-white/5 overflow-hidden p-0.5 shadow-inner">
+                                        <div 
+                                            class="h-full bg-gradient-to-r from-brandPrimary via-brandSecondary to-brandCyan rounded-full transition-all duration-300 shadow-[0_0_8px_#6366f1]"
+                                            style={{ width: `${progress.total > 0 ? (progress.current / progress.total) * 100 : 0}%` }}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Retro Console */}
+                            <TerminalConsole logs={logs} />
+                        </div>
+                    </div>
+
+                    {/* --- Analytics and Results Section (Revealed on Complete!) --- */}
+                    {analysisResults && (
+                        <div class="animate-fadeIn transition-opacity duration-1000 mt-12">
+                            <hr class="border-white/5 mb-10" />
+
+                            <h2 class="text-2xl font-extrabold tracking-tight text-white mb-6 flex items-center gap-3">
+                                <span class="w-8 h-8 rounded-lg bg-brandGreen/10 border border-brandGreen/20 text-brandGreen flex items-center justify-center">
+                                    📊
+                                </span>
+                                ANALYTICAL REPORT SUMMARY
+                            </h2>
+
+                            {/* KPI metrics row */}
+                            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                                <div class="glass-panel p-6 rounded-2xl border-l-4 border-brandPrimary shadow-md">
+                                    <p class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Students Searched</p>
+                                    <h4 class="text-3xl font-extrabold text-white">{analysisResults.summary.total_students}</h4>
+                                    <p class="text-[10px] text-gray-500 font-medium mt-1">Processed USN requests</p>
+                                </div>
+                                <div class="glass-panel p-6 rounded-2xl border-l-4 border-brandGreen shadow-md">
+                                    <p class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Total Pass Count</p>
+                                    <h4 class="text-3xl font-extrabold text-brandGreen">{analysisResults.summary.passed_count}</h4>
+                                    <p class="text-[10px] text-brandGreen/80 font-medium mt-1">Cleared with zero backlog</p>
+                                </div>
+                                <div class="glass-panel p-6 rounded-2xl border-l-4 border-brandRed shadow-md">
+                                    <p class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Remedial Backlogs</p>
+                                    <h4 class="text-3xl font-extrabold text-brandRed">{analysisResults.summary.failed_count}</h4>
+                                    <p class="text-[10px] text-brandRed/80 font-medium mt-1">Failed one or more subjects</p>
+                                </div>
+                                <div class="glass-panel p-6 rounded-2xl border-l-4 border-brandCyan shadow-md">
+                                    <p class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Overall Pass Percentage</p>
+                                    <h4 class="text-3xl font-extrabold text-brandCyan">{analysisResults.summary.pass_percentage}%</h4>
+                                    <p class="text-[10px] text-gray-500 font-medium mt-1">Class academic pass rate</p>
+                                </div>
+                            </div>
+
+                            {/* Charts Grid */}
+                            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
+                                <div class="lg:col-span-2 glass-panel p-6 rounded-2xl">
+                                    <h3 class="text-sm font-bold text-white uppercase tracking-wider mb-5 flex items-center justify-between">
+                                        <span>📚 SUBJECT-WISE PERFORMANCE ANALYSIS</span>
+                                        <span class="text-[10px] text-gray-400">Pass rate columns & average score line</span>
+                                    </h3>
+                                    <SubjectAnalyticsChart subjectData={analysisResults.subject_analysis} />
+                                </div>
+                                <div class="glass-panel p-6 rounded-2xl flex flex-col justify-between">
+                                    <h3 class="text-sm font-bold text-white uppercase tracking-wider mb-5 text-center">
+                                        ⚖️ CLASS PASS/FAIL BALANCE
+                                    </h3>
+                                    <div class="flex-1 flex items-center justify-center">
+                                        <PassFailDonutChart summary={analysisResults.summary} />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Excel Download Panel */}
+                            <div class="glass-panel p-6 rounded-3xl pulsing-border border text-center mb-12 max-w-2xl mx-auto shadow-xl shadow-brandPrimary/5">
+                                <div class="w-16 h-16 bg-brandGreen/10 border border-brandGreen/20 text-brandGreen rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">
+                                    📂
+                                </div>
+                                <h3 class="text-xl font-bold text-white mb-2">Download Complete Excel Report</h3>
+                                <p class="text-xs text-gray-400 max-w-md mx-auto mb-6">
+                                    Generated a beautiful, multi-sheet workbook containing overall details, subject analysis, topper dashboards, and colored class lists.
+                                </p>
+                                <a 
+                                    href={`/api/download/${sessionID}`} 
+                                    download
+                                    class="inline-flex items-center gap-2 bg-gradient-to-r from-brandGreen to-brandCyan hover:opacity-95 rounded-xl px-8 py-3 text-sm font-bold text-white transition button-glow shadow-lg shadow-brandGreen/25 text-glow"
+                                >
+                                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                    </svg>
+                                    DOWNLOAD BUNDLED REPORT (.XLSX)
+                                </a>
+                            </div>
+
+                            {/* Tabbed Interactive Directories */}
+                            <div class="glass-panel rounded-2xl overflow-hidden shadow-lg mb-8">
+                                <div class="flex flex-col md:flex-row items-center justify-between border-b border-white/5 bg-black/30 p-4 gap-4">
+                                    {/* Tabs */}
+                                    <div class="flex flex-wrap gap-2 w-full md:w-auto">
+                                        <button 
+                                            onClick={() => setActiveTab("directory")}
+                                            class={`px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition ${activeTab === "directory" ? 'bg-brandPrimary text-white shadow' : 'text-gray-400 hover:text-white'}`}
+                                        >
+                                            📁 Student Directory
+                                        </button>
+                                        <button 
+                                            onClick={() => setActiveTab("subjects")}
+                                            class={`px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition ${activeTab === "subjects" ? 'bg-brandPrimary text-white shadow' : 'text-gray-400 hover:text-white'}`}
+                                        >
+                                            📓 Subject Metrics
+                                        </button>
+                                        <button 
+                                            onClick={() => setActiveTab("toppers")}
+                                            class={`px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition ${activeTab === "toppers" ? 'bg-brandPrimary text-white shadow' : 'text-gray-400 hover:text-white'}`}
+                                        >
+                                            👑 Batch Toppers (Top 10)
+                                        </button>
+                                        <button 
+                                            onClick={() => setActiveTab("backlogs")}
+                                            class={`px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition ${activeTab === "backlogs" ? 'bg-brandPrimary text-white shadow' : 'text-gray-400 hover:text-white'}`}
+                                        >
+                                            🚨 Remedial Backlogs
+                                        </button>
+                                    </div>
+
+                                    {/* Quick Filters - Visible on Directory tab only */}
+                                    {activeTab === "directory" && (
+                                        <div class="flex flex-col md:flex-row gap-3 w-full md:w-auto items-center">
+                                            {/* Search */}
+                                            <input 
+                                                type="text" 
+                                                placeholder="Search name or USN..."
+                                                value={searchTerm}
+                                                onChange={(e) => setSearchTerm(e.target.value)}
+                                                class="w-full md:w-48 bg-black/45 border border-white/5 focus:border-brandPrimary focus:outline-none rounded-xl px-3 py-1.5 text-xs text-white"
+                                            />
+                                            {/* Status Filter */}
+                                            <select 
+                                                value={statusFilter}
+                                                onChange={(e) => setStatusFilter(e.target.value)}
+                                                class="w-full md:w-36 bg-black/45 border border-white/5 focus:border-brandPrimary focus:outline-none rounded-xl px-3 py-1.5 text-xs text-white cursor-pointer"
+                                            >
+                                                <option value="ALL">All Records</option>
+                                                <option value="PASS">Cleared Class</option>
+                                                <option value="FAIL">Backlog Class</option>
+                                                <option value="DISTINCTION">Distinction Only</option>
+                                                <option value="FIRST CLASS">First Class Only</option>
+                                            </select>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div class="p-6 overflow-x-auto">
+                                    {/* Directory Tab Content */}
+                                    {activeTab === "directory" && (
+                                        <table class="w-full text-left text-xs border-collapse">
+                                            <thead>
+                                                <tr class="border-b border-white/5 text-gray-400 uppercase tracking-widest font-bold">
+                                                    <th class="py-3 px-4">USN</th>
+                                                    <th class="py-3 px-4">Student Name</th>
+                                                    <th class="py-3 px-4 text-right">Score</th>
+                                                    <th class="py-3 px-4 text-right">Percentage</th>
+                                                    <th class="py-3 px-4 text-center">Class / Result</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {filteredResults.map((student, idx) => {
+                                                    const isFail = "FAIL" === student.status;
+                                                    const isDistinction = student.status.includes("DISTINCTION");
+                                                    
+                                                    let statusBadge = "bg-brandGreen/10 border-brandGreen/20 text-brandGreen";
+                                                    if (isFail) statusBadge = "bg-brandRed/10 border-brandRed/20 text-brandRed";
+                                                    else if (isDistinction) statusBadge = "bg-brandCyan/10 border-brandCyan/20 text-brandCyan text-glow";
+
+                                                    return (
+                                                        <tr key={idx} class="border-b border-white/5 hover:bg-white/5 transition-all">
+                                                            <td class="py-3.5 px-4 font-mono font-bold text-gray-300">{student.usn}</td>
+                                                            <td class="py-3.5 px-4 font-bold text-white uppercase">{student.name}</td>
+                                                            <td class="py-3.5 px-4 text-right font-semibold text-gray-300">{student.total_marks} / {student.max_marks}</td>
+                                                            <td class="py-3.5 px-4 text-right font-bold text-brandCyan font-mono">{student.percentage}%</td>
+                                                            <td class="py-3.5 px-4 text-center">
+                                                                <span class={`inline-block px-3 py-1 rounded-full border text-[10px] font-bold tracking-wider ${statusBadge}`}>
+                                                                    {student.status}
+                                                                </span>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                                {filteredResults.length === 0 && (
+                                                    <tr>
+                                                        <td colspan="5" class="py-8 text-center text-gray-500 italic">No matching student records found.</td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    )}
+
+                                    {/* Subjects Tab Content */}
+                                    {activeTab === "subjects" && (
+                                        <table class="w-full text-left text-xs border-collapse">
+                                            <thead>
+                                                <tr class="border-b border-white/5 text-gray-400 uppercase tracking-widest font-bold">
+                                                    <th class="py-3 px-4">Subject Code</th>
+                                                    <th class="py-3 px-4">Subject Name</th>
+                                                    <th class="py-3 px-4 text-right">Registered</th>
+                                                    <th class="py-3 px-4 text-right">Passed</th>
+                                                    <th class="py-3 px-4 text-right">Failed</th>
+                                                    <th class="py-3 px-4 text-right">Pass Rate (%)</th>
+                                                    <th class="py-3 px-4 text-right">Average Score</th>
+                                                    <th class="py-3 px-4 text-right">Highest Score</th>
+                                                    <th class="py-3 px-4 text-center">Subject Topper</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {analysisResults.subject_analysis.map((sub, idx) => (
+                                                    <tr key={idx} class="border-b border-white/5 hover:bg-white/5 transition-all">
+                                                        <td class="py-3.5 px-4 font-mono font-bold text-brandPrimary">{sub.code}</td>
+                                                        <td class="py-3.5 px-4 font-bold text-white uppercase">{sub.name}</td>
+                                                        <td class="py-3.5 px-4 text-right font-semibold text-gray-300">{sub.registered}</td>
+                                                        <td class="py-3.5 px-4 text-right text-brandGreen font-bold">{sub.passed}</td>
+                                                        <td class="py-3.5 px-4 text-right text-brandRed font-bold">{sub.failed}</td>
+                                                        <td class="py-3.5 px-4 text-right font-bold text-brandCyan font-mono">{sub.pass_percentage}%</td>
+                                                        <td class="py-3.5 px-4 text-right text-gray-300 font-semibold">{sub.average_marks}</td>
+                                                        <td class="py-3.5 px-4 text-right text-brandSecondary font-bold">{sub.highest_marks}</td>
+                                                        <td class="py-3.5 px-4 text-center font-mono font-bold text-brandOrange">{sub.highest_usn}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    )}
+
+                                    {/* Toppers Tab Content */}
+                                    {activeTab === "toppers" && (
+                                        <table class="w-full text-left text-xs border-collapse">
+                                            <thead>
+                                                <tr class="border-b border-white/5 text-gray-400 uppercase tracking-widest font-bold">
+                                                    <th class="py-3 px-4 text-center">Rank</th>
+                                                    <th class="py-3 px-4">USN</th>
+                                                    <th class="py-3 px-4">Topper Student Name</th>
+                                                    <th class="py-3 px-4 text-right">Score Scored</th>
+                                                    <th class="py-3 px-4 text-right">Percentage</th>
+                                                    <th class="py-3 px-4 text-center">Class Merit</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {analysisResults.toppers.map((topper, idx) => {
+                                                    const isRank1 = topper.rank === 1;
+                                                    let rankBadge = "bg-white/5 text-gray-300 border border-white/5";
+                                                    if (isRank1) rankBadge = "bg-brandOrange/10 border-brandOrange/30 text-brandOrange font-extrabold text-glow";
+                                                    else if (topper.rank === 2) rankBadge = "bg-brandCyan/10 border-brandCyan/20 text-brandCyan";
+                                                    else if (topper.rank === 3) rankBadge = "bg-brandSecondary/10 border-brandSecondary/20 text-brandSecondary";
+
+                                                    return (
+                                                        <tr key={idx} class="border-b border-white/5 hover:bg-white/5 transition-all">
+                                                            <td class="py-3.5 px-4 text-center">
+                                                                <span class={`inline-flex w-7 h-7 rounded-full items-center justify-center text-xs ${rankBadge}`}>
+                                                                    {isRank1 ? "👑" : topper.rank}
+                                                                </span>
+                                                            </td>
+                                                            <td class="py-3.5 px-4 font-mono font-bold text-gray-300">{topper.usn}</td>
+                                                            <td class="py-3.5 px-4 font-extrabold text-white uppercase flex items-center gap-2">
+                                                                {topper.name}
+                                                            </td>
+                                                            <td class="py-3.5 px-4 text-right font-bold text-gray-300">{topper.total_marks} / {topper.max_marks}</td>
+                                                            <td class="py-3.5 px-4 text-right font-bold text-brandCyan font-mono">{topper.percentage}%</td>
+                                                            <td class="py-3.5 px-4 text-center">
+                                                                <span class="inline-block px-3 py-1 rounded-full border border-brandPrimary/20 bg-brandPrimary/10 text-brandPrimary text-[10px] font-bold tracking-wider">
+                                                                    {topper.status}
+                                                                </span>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    )}
+
+                                    {/* Remedial List Content */}
+                                    {activeTab === "backlogs" && (
+                                        <table class="w-full text-left text-xs border-collapse">
+                                            <thead>
+                                                <tr class="border-b border-white/5 text-gray-400 uppercase tracking-widest font-bold">
+                                                    <th class="py-3 px-4">USN</th>
+                                                    <th class="py-3 px-4">Student Name</th>
+                                                    <th class="py-3 px-4 text-right">Aggregated Score</th>
+                                                    <th class="py-3 px-4 text-right">Backlog Count</th>
+                                                    <th class="py-3 px-4 text-center">Failed Subject Codes</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {analysisResults.failed_students.map((student, idx) => (
+                                                    <tr key={idx} class="border-b border-white/5 hover:bg-white/5 transition-all">
+                                                        <td class="py-3.5 px-4 font-mono font-bold text-gray-300">{student.usn}</td>
+                                                        <td class="py-3.5 px-4 font-bold text-white uppercase">{student.name}</td>
+                                                        <td class="py-3.5 px-4 text-right font-semibold text-gray-400">{student.total_marks}</td>
+                                                        <td class="py-3.5 px-4 text-right text-brandRed font-extrabold text-sm">{student.failed_subjects.length}</td>
+                                                        <td class="py-3.5 px-4 text-center font-mono">
+                                                            {student.failed_subjects.map((code, sIdx) => (
+                                                                <span key={sIdx} class="inline-block px-2 py-0.5 bg-brandRed/10 border border-brandRed/20 rounded text-[10px] text-brandRed font-bold mr-1.5">
+                                                                    {code}
+                                                                </span>
+                                                            ))}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                                {analysisResults.failed_students.length === 0 && (
+                                                    <tr>
+                                                        <td colspan="5" class="py-8 text-center text-brandGreen font-bold italic">
+                                                            🎉 Academic Excellence! 100% of students passed all registered courses successfully.
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        // Render the application into root container
+        const rootElement = document.getElementById('root');
+        const root = ReactDOM.createRoot(rootElement);
+        root.render(<App />);
+    </script>
+</body>
+</html>
