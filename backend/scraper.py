@@ -867,12 +867,21 @@ class VTUScraper:
                     failed_any = True
                 elif re.search(r"\b(A|AB|ABSENT)\b", res_text):
                     result_char = "A"
-                    failed_any = True  # Absent = fail for analysis
-                elif re.search(r"\bW\b|WITHHELD", res_text):
+                    failed_any = True
+                elif re.search(r"\b(W|WITHHELD)\b", res_text):
                     result_char = "W"
                     failed_any = True
-                else:
+                elif re.search(r"\b(X|NE|NOT\s*ELIGIBLE)\b", res_text):
+                    result_char = "NE"
+                    failed_any = True
+                elif re.search(r"\b(NA|NOT\s*APPLICABLE)\b", res_text):
+                    result_char = "NA"
+                elif res_text in ["P", "PASS"]:
                     result_char = "P"
+                else:
+                    result_char = res_text if res_text else "P"
+                    if result_char != "P":
+                        failed_any = True
 
                 subjects.append({
                     "code": code,

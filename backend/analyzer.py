@@ -344,8 +344,8 @@ class ResultAnalyzer:
             backlogs = 0
             for sub in r["subjects"]:
                 student_sub_map[sub["code"]] = sub
-                res_u = sub["result"].upper()
-                if res_u in ["F", "A", "AB", "ABSENT", "W", "WITHHELD"]:
+                res_u = str(sub["result"]).strip().upper()
+                if res_u not in ["P", "PASS", "NA", "NOT APPLICABLE"]:
                     backlogs += 1
             
             # SL.No
@@ -367,27 +367,28 @@ class ResultAnalyzer:
                 
                 if sub:
                     im = sub["internal"]
-                    res_code = sub["result"].upper()
-                    if res_code in ["A", "AB", "ABSENT"]:
-                        em = "A"
-                    elif res_code in ["W", "WITHHELD"]:
-                        em = "W"
-                    else:
+                    res_code = str(sub["result"]).strip().upper()
+                    if res_code in ["P", "PASS"]:
                         em = sub["external"]
+                        failed = False
+                        is_special = False
+                    else:
+                        # For A, W, NE, NA, X, F or any special status, display status text in EM column
+                        em = res_code
+                        failed = (res_code == "F")
+                        is_special = (res_code != "F")
                     tot = sub["total"]
-                    failed = res_code == "F"
-                    is_absent = res_code in ["A", "AB", "ABSENT"]
                 else:
                     im = em = tot = ""
                     failed = False
-                    is_absent = False
+                    is_special = False
                     
                 ws.cell(row=row_idx, column=c_start, value=im)
                 ws.cell(row=row_idx, column=c_start + 1, value=em)
                 ws.cell(row=row_idx, column=c_start + 2, value=tot)
                 
                 c_fill = zebra_fill if is_zebra else None
-                if is_absent:
+                if is_special:
                     style_cells(row_idx, c_start, row_idx, c_start + 2, Font(name="Segoe UI", size=10, bold=True, color="9C6500"), yellow_fill, Alignment(horizontal="center"), light_border)
                 elif failed:
                     style_cells(row_idx, c_start, row_idx, c_start + 2, Font(name="Segoe UI", size=10, bold=True, color="9C0006"), red_fill, Alignment(horizontal="center"), light_border)
