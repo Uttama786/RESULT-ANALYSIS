@@ -436,7 +436,7 @@ def send_feedback_email_async(entry: dict):
     from email.mime.multipart import MIMEMultipart
     
     resend_api_key = os.getenv("RESEND_API_KEY", "").strip()
-    web3forms_key = os.getenv("WEB3FORMS_ACCESS_KEY", "").strip()
+    web3forms_key = os.getenv("WEB3FORMS_ACCESS_KEY", "8708b761-cd16-4b79-ba2c-554eb547f017").strip()
     
     smtp_user = os.getenv("SMTP_USER", "").strip() or os.getenv("GMAIL_USER", "uttamabhise@gmail.com").strip()
     smtp_password = os.getenv("SMTP_PASSWORD", "").strip() or os.getenv("GMAIL_APP_PASSWORD", "bkizjhjlvazlrxho").strip()
@@ -463,64 +463,7 @@ Destination Address: {TARGET_FEEDBACK_EMAIL}
 
     logger.info(f"📧 [FEEDBACK ROUTER] Processing feedback notification for: {TARGET_FEEDBACK_EMAIL}")
     
-    # 1. Dispatch via FormSubmit HTTPS API (Port 443 - Works 100% on Render Free Tier with zero socket blocks)
-    try:
-        fs_payload = json.dumps({
-            "name": entry['name'],
-            "email": entry['email'] or TARGET_FEEDBACK_EMAIL,
-            "_subject": subject,
-            "_captcha": "false",
-            "Category": entry['category'],
-            "Rating": f"{entry['rating']}/5 Stars",
-            "Feedback Message": entry['message']
-        }).encode("utf-8")
-        
-        fs_req = urllib.request.Request(
-            f"https://formsubmit.co/ajax/{TARGET_FEEDBACK_EMAIL}",
-            data=fs_payload,
-            headers={
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-                "Referer": "https://vtu-result-scraper.onrender.com"
-            },
-            method="POST"
-        )
-        with urllib.request.urlopen(fs_req, timeout=12) as resp:
-            resp_data = json.loads(resp.read().decode("utf-8"))
-            if resp_data.get("success") == "true":
-                logger.info(f"✅ Feedback email successfully delivered via FormSubmit HTTPS to {TARGET_FEEDBACK_EMAIL}")
-                return
-            else:
-                logger.info(f"ℹ️ FormSubmit HTTPS Status: {resp_data.get('message')}")
-    except Exception as fs_err:
-        logger.warning(f"⚠️ FormSubmit HTTPS dispatch note: {fs_err}")
-    if resend_api_key:
-        try:
-            req_data = json.dumps({
-                "from": "VTU Result Analyzer <onboarding@resend.dev>",
-                "to": [TARGET_FEEDBACK_EMAIL],
-                "subject": subject,
-                "text": body
-            }).encode("utf-8")
-            
-            req = urllib.request.Request(
-                "https://api.resend.com/emails",
-                data=req_data,
-                headers={
-                    "Authorization": f"Bearer {resend_api_key}",
-                    "Content-Type": "application/json"
-                },
-                method="POST"
-            )
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                if resp.status in [200, 201]:
-                    logger.info(f"✅ Feedback email successfully delivered via Resend API to {TARGET_FEEDBACK_EMAIL}")
-                    return
-        except Exception as e:
-            logger.error(f"⚠️ Resend API dispatch error: {e}")
-
-    # 2. Dispatch via Web3Forms API (HTTPS Port 443 - Free Email API for Cloud Apps)
+    # 1. Dispatch via Web3Forms API (HTTPS Port 443 - Bypasses Render socket restrictions 100%)
     if web3forms_key:
         try:
             req_data = json.dumps({
@@ -534,13 +477,19 @@ Destination Address: {TARGET_FEEDBACK_EMAIL}
             req = urllib.request.Request(
                 "https://api.web3forms.com/submit",
                 data=req_data,
-                headers={"Content-Type": "application/json"},
+                headers={
+                    "Content-Type": "application/json",
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+                },
                 method="POST"
             )
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                if resp.status in [200, 201]:
+            with urllib.request.urlopen(req, timeout=12) as resp:
+                resp_data = json.loads(resp.read().decode("utf-8"))
+                if resp_data.get("success") is True or resp.status in [200, 201]:
                     logger.info(f"✅ Feedback email successfully delivered via Web3Forms API to {TARGET_FEEDBACK_EMAIL}")
                     return
+                else:
+                    logger.warning(f"⚠️ Web3Forms API response: {resp_data}")
         except Exception as e:
             logger.error(f"⚠️ Web3Forms API dispatch error: {e}")
 
