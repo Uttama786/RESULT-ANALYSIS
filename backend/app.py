@@ -402,6 +402,63 @@ async def websocket_scrape(websocket: WebSocket, session_id: str):
             pass
         logger.info(f"WebSocket scrape session finished: {session_id}")
 
+FEEDBACKS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "feedbacks.json")
+
+class FeedbackRequest(BaseModel):
+    name: str = ""
+    email: str = ""
+    category: str = "General Feedback"
+    rating: int = 5
+    message: str
+
+@app.post("/api/feedback")
+def submit_feedback(feedback: FeedbackRequest):
+    import json
+    from datetime import datetime
+    
+    if not feedback.message.strip():
+        raise HTTPException(status_code=400, detail="Feedback message cannot be empty.")
+        
+    entry = {
+        "id": str(uuid.uuid4()),
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "name": feedback.name.strip() or "Anonymous User",
+        "email": feedback.email.strip(),
+        "category": feedback.category,
+        "rating": feedback.rating,
+        "message": feedback.message.strip()
+    }
+    
+    feedbacks = []
+    if os.path.exists(FEEDBACKS_FILE):
+        try:
+            with open(FEEDBACKS_FILE, "r", encoding="utf-8") as f:
+                feedbacks = json.load(f)
+        except Exception:
+            feedbacks = []
+            
+    feedbacks.insert(0, entry)
+    
+    try:
+        with open(FEEDBACKS_FILE, "w", encoding="utf-8") as f:
+            json.dump(feedbacks, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        logger.error(f"Failed to write feedback: {e}")
+        raise HTTPException(status_code=500, detail="Could not save feedback.")
+        
+    return {"status": "success", "message": "Thank you for your feedback!"}
+
+@app.get("/api/feedbacks")
+def get_feedbacks():
+    import json
+    if os.path.exists(FEEDBACKS_FILE):
+        try:
+            with open(FEEDBACKS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return []
+    return []
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("app:app", host="127.0.0.1", port=8000, reload=True)
