@@ -10,6 +10,19 @@ from openpyxl.utils import get_column_letter
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
+def is_valid_subject_code(code: str, name: str = "") -> bool:
+    """Verifies that a code is a valid VTU subject code (must contain digits, not be PASS/FAIL legend)."""
+    if not code:
+        return False
+    code_upper = str(code).strip().upper()
+    if not any(char.isdigit() for char in code_upper):
+        return False
+    if code_upper in ["PASS", "FAIL", "ABSENT", "WITHHELD", "REVALUATION", "ABBREVIATION", "NOMENCLATURE"]:
+        return False
+    if "->" in str(name) or "=>" in str(name):
+        return False
+    return True
+
 class ResultAnalyzer:
     def __init__(self, student_records: list):
         self.records = student_records
@@ -47,7 +60,7 @@ class ResultAnalyzer:
             "name": f["name"],
             "total_marks": f["total_marks"],
             "percentage": f["percentage"],
-            "failed_subjects": [sub["code"] for sub in f["subjects"] if sub["result"] == "F"]
+            "failed_subjects": [sub["code"] for sub in f["subjects"] if sub["result"] == "F" and is_valid_subject_code(sub["code"], sub.get("name", ""))]
         } for f in failed_records]
         
         # Subject-wise analysis
@@ -57,6 +70,9 @@ class ResultAnalyzer:
                 code = sub["code"]
                 name = sub["name"]
                 
+                if not is_valid_subject_code(code, name):
+                    continue
+                    
                 if code not in subject_data:
                     subject_data[code] = {
                         "code": code,
@@ -195,7 +211,7 @@ class ResultAnalyzer:
             for sub in r["subjects"]:
                 code = sub["code"]
                 name = sub["name"]
-                if code not in subjects_dict:
+                if is_valid_subject_code(code, name) and code not in subjects_dict:
                     subjects_dict[code] = name
         subject_codes = list(subjects_dict.keys())
         N = len(subject_codes)
