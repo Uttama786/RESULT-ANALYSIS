@@ -126,6 +126,13 @@ class VTUScraper:
             chrome_options.add_argument("--disable-blink-features=AutomationControlled")
             chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
             
+            # Detect Chrome binary location on Linux / Docker (e.g. Render deployments)
+            for binary_path in ["/usr/bin/google-chrome", "/usr/bin/google-chrome-stable", "/usr/bin/chromium-browser", "/usr/bin/chromium"]:
+                if os.path.exists(binary_path):
+                    chrome_options.binary_location = binary_path
+                    logger.info(f"Detected system Chrome binary at: {binary_path}")
+                    break
+            
             # Initialize using WebDriverManager, fallback to standard selenium if it fails
             try:
                 service = Service(ChromeDriverManager().install())

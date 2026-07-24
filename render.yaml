@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: vtu-result-scraper
+    name: vtu-result-analysis
     env: docker
     plan: free
     envVars:
