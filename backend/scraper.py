@@ -799,13 +799,17 @@ class VTUScraper:
             raw_code = cells[code_idx].get_text(separator=" ", strip=True)
             code = re.sub(r"\s+", " ", raw_code).strip()
 
+            # All valid VTU subject codes contain digits (e.g. 21CS61, BCS401, 18MAT31). Skip legend/status text like PASS, FAIL, etc.
+            if not any(char.isdigit() for char in code):
+                continue
+
             # Pattern 1: Traditional VTU code starting with 2 digits (e.g. 21CS61, 18MAT31)
             m1 = re.search(r"\b([0-9]{2}[A-Za-z]{2,6}[0-9]{1,2}[A-Za-z]?)\b", code)
             if m1:
                 code = m1.group(1).upper()
             else:
                 # Pattern 2: Newer VTU codes starting with letters (e.g. BCS801, BINT803B, BIN803B)
-                m2 = re.search(r"\b([A-Z]{1,5}[A-Z0-9]{2,8})\b", code.upper())
+                m2 = re.search(r"\b([A-Z]{1,5}[A-Z0-9]{1,8})\b", code.upper())
                 if m2:
                     code = m2.group(1)
                 elif not re.match(r"^[0-9A-Za-z]{3,12}$", code):
@@ -813,8 +817,12 @@ class VTUScraper:
                 else:
                     code = code.upper()
 
-            # Skip header/label text that may have slipped through
-            if re.search(r"^(subject|semester|internal|external|total|result|marks|code|name|aicte|announced|nomenclature|abbreviation)$",
+            # Ensure code still has digits after pattern extraction
+            if not any(char.isdigit() for char in code):
+                continue
+
+            # Skip header/label/legend text that may have slipped through
+            if re.search(r"^(subject|semester|internal|external|total|result|marks|code|name|aicte|announced|nomenclature|abbreviation|pass|fail|absent|withheld)$",
                          code, re.IGNORECASE):
                 continue
 
@@ -823,6 +831,10 @@ class VTUScraper:
             subject_name = cells[name_idx].get_text(separator=" ", strip=True).replace("\xa0", " ") \
                 if name_idx < len(cells) else code
             subject_name = re.sub(r"\s+", " ", subject_name).strip()
+
+            # Skip if subject name contains legend arrows like "F -> FAIL" or "P -> PASS"
+            if "->" in subject_name or "=>" in subject_name or re.search(r"\b(pass|fail|withheld)\b", subject_name, re.IGNORECASE) and len(subject_name) < 12:
+                continue
 
             # --- Extract marks ---
             try:
