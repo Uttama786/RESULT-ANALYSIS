@@ -223,18 +223,22 @@ class VTUScraper:
 
         branch = branch.upper()
 
+        # Detect Lateral Entry (400+ roll numbers). Diploma entry students join 1 year later.
+        roll_match = re.search(r'(\d{3})$', usn.strip())
+        roll_num = int(roll_match.group(1)) if roll_match else 0
+        effective_year = (year - 1) if (roll_num >= 400 and year > 18) else year
+
         # Determine scheme year (usually 18, 21, 22)
-        if year >= 22:
+        if effective_year >= 22:
             scheme = "22"
-        elif year >= 21:
+        elif effective_year >= 21:
             scheme = "21"
         else:
             scheme = "18"
 
-        # Determine semester (digit) based on year of joining (assuming current year is 2026)
-        # 22 -> 8th sem, 23 -> 6th sem, 24 -> 4th sem, 25 -> 2nd sem
+        # Determine semester (digit) based on effective year of batch
         sem_map = {22: 8, 23: 6, 24: 4, 25: 2}
-        sem = sem_map.get(year, 6)
+        sem = sem_map.get(effective_year, 6)
 
         # Subject templates for main branches
         subjects_templates = {

@@ -40,28 +40,31 @@ app.add_middleware(
 session_registry: Dict[str, Dict[str, Any]] = {}
 
 def parse_usn_range(start_usn: str, end_usn: str) -> List[str]:
-    """Generates an list of USNs from start to end range (inclusive)."""
+    """Generates a list of USNs from start to end range (inclusive). Handles same prefix or shortened right end (e.g. 120 or 4DM21CS120)."""
     start = start_usn.strip().upper()
     end = end_usn.strip().upper()
     
-    # Match standard alphanumeric USN pattern, e.g., 1SG21CS001
     match_start = re.match(r"^([A-Z0-9]+?)(\d+)$", start)
-    match_end = re.match(r"^([A-Z0-9]+?)(\d+)$", end)
-    
-    if not (match_start and match_end):
+    if not match_start:
         return [start]
         
     prefix_start, num_start = match_start.groups()
-    prefix_end, num_end = match_end.groups()
+    width = len(num_start)
     
-    if prefix_start != prefix_end:
-        # If prefixes differ, range is invalid, return endpoints
+    # Check if end is just numeric (e.g. "120" or "430")
+    if re.match(r"^\d+$", end):
+        end = f"{prefix_start}{int(end):0{width}d}"
+        
+    match_end = re.match(r"^([A-Z0-9]+?)(\d+)$", end)
+    if not match_end:
         return [start, end]
         
-    width = len(num_start)
+    prefix_end, num_end = match_end.groups()
+    if prefix_start != prefix_end:
+        return [start, end]
+        
     s_idx = int(num_start)
     e_idx = int(num_end)
-    
     step = 1 if s_idx <= e_idx else -1
     
     usns = []
@@ -70,14 +73,37 @@ def parse_usn_range(start_usn: str, end_usn: str) -> List[str]:
     return usns
 
 def parse_multiple_usns(usn_input_str: str) -> List[str]:
-    """Parses a comma-separated list of individual USNs."""
-    raw_list = usn_input_str.split(",")
-    cleaned_list = []
+    """
+    Parses comma-, semicolon-, or newline-separated list of individual USNs and range expressions.
+    Examples supported:
+      - "4DM21CS001, 4DM21CS002"
+      - "4DM21CS001-4DM21CS120, 4DM22CS400-4DM22CS430" (Regular + Lateral Entry)
+      - "4DM21CS001-060, 4DM22CS400-430" (Shortened range notation)
+    """
+    raw_list = re.split(r'[,;\n]+', usn_input_str)
+    result_usns = []
+    seen = set()
+    
     for item in raw_list:
-        cleaned = item.strip().upper()
-        if cleaned:
-            cleaned_list.append(cleaned)
-    return cleaned_list
+        token = item.strip().upper()
+        if not token:
+            continue
+            
+        if "-" in token:
+            parts = token.split("-")
+            if len(parts) == 2:
+                range_list = parse_usn_range(parts[0], parts[1])
+                for u in range_list:
+                    if u not in seen:
+                        seen.add(u)
+                        result_usns.append(u)
+                continue
+                
+        if token not in seen:
+            seen.add(token)
+            result_usns.append(token)
+            
+    return result_usns
 
 @app.get("/", response_class=HTMLResponse)
 def read_root():

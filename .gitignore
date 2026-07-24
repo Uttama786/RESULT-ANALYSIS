@@ -9,3 +9,4 @@ env/
 exports/
 node_modules/
 *.log
+scratch/
