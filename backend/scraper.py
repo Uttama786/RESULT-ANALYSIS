@@ -865,11 +865,12 @@ class VTUScraper:
                 if re.search(r"\bF\b|FAIL", res_text):
                     result_char = "F"
                     failed_any = True
+                elif re.search(r"\b(A|AB|ABSENT)\b", res_text):
+                    result_char = "A"
+                    failed_any = True  # Absent = fail for analysis
                 elif re.search(r"\bW\b|WITHHELD", res_text):
                     result_char = "W"
-                elif re.search(r"\bAB\b|ABSENT", res_text):
-                    result_char = "AB"
-                    failed_any = True  # Absent = fail for analysis
+                    failed_any = True
                 else:
                     result_char = "P"
 

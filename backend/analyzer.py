@@ -344,7 +344,8 @@ class ResultAnalyzer:
             backlogs = 0
             for sub in r["subjects"]:
                 student_sub_map[sub["code"]] = sub
-                if sub["result"].upper() == "F":
+                res_u = sub["result"].upper()
+                if res_u in ["F", "A", "AB", "ABSENT", "W", "WITHHELD"]:
                     backlogs += 1
             
             # SL.No
@@ -366,20 +367,30 @@ class ResultAnalyzer:
                 
                 if sub:
                     im = sub["internal"]
-                    em = sub["external"]
+                    res_code = sub["result"].upper()
+                    if res_code in ["A", "AB", "ABSENT"]:
+                        em = "A"
+                    elif res_code in ["W", "WITHHELD"]:
+                        em = "W"
+                    else:
+                        em = sub["external"]
                     tot = sub["total"]
-                    failed = sub["result"].upper() == "F"
+                    failed = res_code == "F"
+                    is_absent = res_code in ["A", "AB", "ABSENT"]
                 else:
                     im = em = tot = ""
                     failed = False
+                    is_absent = False
                     
                 ws.cell(row=row_idx, column=c_start, value=im)
                 ws.cell(row=row_idx, column=c_start + 1, value=em)
                 ws.cell(row=row_idx, column=c_start + 2, value=tot)
                 
                 c_fill = zebra_fill if is_zebra else None
-                if failed:
-                    style_cells(row_idx, c_start, row_idx, c_start + 2, Font(name="Segoe UI", size=10, color="9C0006"), red_fill, Alignment(horizontal="center"), light_border)
+                if is_absent:
+                    style_cells(row_idx, c_start, row_idx, c_start + 2, Font(name="Segoe UI", size=10, bold=True, color="9C6500"), yellow_fill, Alignment(horizontal="center"), light_border)
+                elif failed:
+                    style_cells(row_idx, c_start, row_idx, c_start + 2, Font(name="Segoe UI", size=10, bold=True, color="9C0006"), red_fill, Alignment(horizontal="center"), light_border)
                 else:
                     style_cells(row_idx, c_start, row_idx, c_start + 2, data_font, c_fill, Alignment(horizontal="center"), light_border)
             
