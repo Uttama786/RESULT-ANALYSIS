@@ -446,10 +446,7 @@ class ResultAnalyzer:
             "Students Registered": s["registered"],
             "Passed": s["passed"],
             "Failed": s["failed"],
-            "Pass Percentage (%)": s["pass_percentage"],
-            "Average Score": s["average_marks"],
-            "Highest Score": s["highest_marks"],
-            "Topper USN": s["highest_usn"]
+            "Pass Percentage (%)": s["pass_percentage"]
         } for s in analysis["subject_analysis"]])
         
         # Sheet 3: Standings (Toppers & Fails)
