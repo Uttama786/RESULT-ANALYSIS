@@ -426,7 +426,8 @@ class FeedbackRequest(BaseModel):
 def send_feedback_email_async(entry: dict):
     """
     Sends email notification of user feedback directly to uttamabhise@gmail.com.
-    Dispatches via Resend Email API Key or Gmail App Password (SMTP) when provided.
+    Dispatches via HTTPS API (Resend / Web3Forms) on Port 443 to bypass cloud host SMTP socket blocks,
+    falling back to Gmail SMTP socket connection.
     """
     import smtplib
     import json
@@ -435,6 +436,8 @@ def send_feedback_email_async(entry: dict):
     from email.mime.multipart import MIMEMultipart
     
     resend_api_key = os.getenv("RESEND_API_KEY", "").strip()
+    web3forms_key = os.getenv("WEB3FORMS_ACCESS_KEY", "").strip()
+    
     smtp_user = os.getenv("SMTP_USER", "").strip() or os.getenv("GMAIL_USER", "uttamabhise@gmail.com").strip()
     smtp_password = os.getenv("SMTP_PASSWORD", "").strip() or os.getenv("GMAIL_APP_PASSWORD", "bkizjhjlvazlrxho").strip()
     smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
@@ -460,7 +463,7 @@ Destination Address: {TARGET_FEEDBACK_EMAIL}
 
     logger.info(f"📧 [FEEDBACK ROUTER] Processing feedback notification for: {TARGET_FEEDBACK_EMAIL}")
     
-    # 1. Dispatch via Resend Email API if RESEND_API_KEY is configured
+    # 1. Dispatch via Resend API (HTTPS Port 443 - Bypasses Render socket restrictions)
     if resend_api_key:
         try:
             req_data = json.dumps({
@@ -479,14 +482,38 @@ Destination Address: {TARGET_FEEDBACK_EMAIL}
                 },
                 method="POST"
             )
-            with urllib.request.urlopen(req) as resp:
+            with urllib.request.urlopen(req, timeout=10) as resp:
                 if resp.status in [200, 201]:
                     logger.info(f"✅ Feedback email successfully delivered via Resend API to {TARGET_FEEDBACK_EMAIL}")
                     return
         except Exception as e:
             logger.error(f"⚠️ Resend API dispatch error: {e}")
 
-    # 2. Dispatch via Gmail SMTP (Tries SSL Port 465 first for cloud host compatibility)
+    # 2. Dispatch via Web3Forms API (HTTPS Port 443 - Free Email API for Cloud Apps)
+    if web3forms_key:
+        try:
+            req_data = json.dumps({
+                "access_key": web3forms_key,
+                "subject": subject,
+                "name": entry['name'],
+                "email": entry['email'] or TARGET_FEEDBACK_EMAIL,
+                "message": body
+            }).encode("utf-8")
+            
+            req = urllib.request.Request(
+                "https://api.web3forms.com/submit",
+                data=req_data,
+                headers={"Content-Type": "application/json"},
+                method="POST"
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                if resp.status in [200, 201]:
+                    logger.info(f"✅ Feedback email successfully delivered via Web3Forms API to {TARGET_FEEDBACK_EMAIL}")
+                    return
+        except Exception as e:
+            logger.error(f"⚠️ Web3Forms API dispatch error: {e}")
+
+    # 3. Dispatch via Gmail SMTP (Tries SSL Port 465 first for local/VPS environments)
     if smtp_user and smtp_password:
         msg = MIMEMultipart()
         msg['From'] = smtp_user
@@ -494,7 +521,6 @@ Destination Address: {TARGET_FEEDBACK_EMAIL}
         msg['Subject'] = subject
         msg.attach(MIMEText(body, 'plain', 'utf-8'))
         
-        # Try Port 465 SSL first (bypasses Render outbound port 587 blocks)
         try:
             with smtplib.SMTP_SSL(smtp_server, 465, timeout=10) as server:
                 server.login(smtp_user, smtp_password)
