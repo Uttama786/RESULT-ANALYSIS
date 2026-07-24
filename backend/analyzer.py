@@ -368,15 +368,31 @@ class ResultAnalyzer:
                 if sub:
                     im = sub["internal"]
                     res_code = str(sub["result"]).strip().upper()
-                    if res_code in ["P", "PASS"]:
+                    
+                    if res_code == "F":
+                        em = sub["external"]  # Display numeric external marks, not "F"
+                        failed = True
+                        is_special = False
+                    elif res_code in ["A", "AB", "ABSENT"]:
+                        em = "A"
+                        failed = True
+                        is_special = True
+                    elif res_code in ["W", "WITHHELD"]:
+                        em = "W"
+                        failed = True
+                        is_special = True
+                    elif res_code in ["X", "NE", "NOT ELIGIBLE"]:
+                        em = "NE"
+                        failed = True
+                        is_special = True
+                    elif res_code in ["NA", "NOT APPLICABLE"]:
+                        em = "NA"
+                        failed = False
+                        is_special = True
+                    else:  # P / PASS
                         em = sub["external"]
                         failed = False
                         is_special = False
-                    else:
-                        # For A, W, NE, NA, X, F or any special status, display status text in EM column
-                        em = res_code
-                        failed = (res_code == "F")
-                        is_special = (res_code != "F")
                     tot = sub["total"]
                 else:
                     im = em = tot = ""
