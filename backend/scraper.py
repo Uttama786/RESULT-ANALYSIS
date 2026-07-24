@@ -77,11 +77,12 @@ class VTUScraper:
         ]
         
         self.captcha_img_candidates = [
-            "//img[contains(@src, 'captcha') or contains(@src, 'Captcha') or contains(@src, 'CAPTCHA')]",
+            "//img[contains(@src, 'captcha_code') or contains(@src, 'captcha') or contains(@src, 'Captcha') or contains(@src, 'CAPTCHA')]",
+            "//img[contains(@src, 'securimage')]",
             "//img[contains(@id, 'captcha') or contains(@id, 'Captcha') or contains(@id, 'CAPTCHA')]",
             "//img[@id='captcha_img']",
-            "//img[contains(@src, 'securimage')]",
-            "//img[contains(@src, 'captcha_code')]"
+            "//form//img[not(contains(@src, 'logo')) and not(contains(@src, 'header'))]",
+            "//img[contains(@src, '.php') and not(contains(@src, 'logo'))]"
         ]
         
         self.submit_btn_candidates = [
@@ -117,6 +118,7 @@ class VTUScraper:
             
         try:
             chrome_options = Options()
+            chrome_options.page_load_strategy = "eager"  # Load DOM content immediately without hanging on slow external assets
             chrome_options.add_argument("--headless=new")  # Run headless (modern)
             chrome_options.add_argument("--disable-gpu")
             chrome_options.add_argument("--no-sandbox")
@@ -133,6 +135,7 @@ class VTUScraper:
                 self.driver = webdriver.Chrome(options=chrome_options)
 
             self.driver.set_window_size(1280, 1024)
+            self.driver.set_page_load_timeout(15)
             logger.info("Selenium WebDriver successfully initialized.")
             return True
         except Exception as e:
@@ -140,6 +143,21 @@ class VTUScraper:
             self.use_simulation = True
             logger.warning("Falling back to Simulation Mode due to browser driver failure.")
             return False
+
+    def _safe_get(self, url: str, timeout: int = 10):
+        """Navigates to URL with timeout handling to prevent Selenium read/page-load hangs."""
+        if not self.driver:
+            return
+        try:
+            self.driver.set_page_load_timeout(timeout)
+            self.driver.get(url)
+        except Exception as e:
+            logger.warning(f"Page load timeout/glitch on {url}: {e}. Stopping background loading and proceeding with available DOM...")
+            try:
+                self.driver.execute_script("window.stop();")
+                time.sleep(0.3)
+            except Exception:
+                pass
 
     def close_browser(self):
         """Safely closes the browser instance."""
@@ -360,17 +378,55 @@ class VTUScraper:
 
     def get_captcha(self, usn: str) -> str:
         """Navigates to the portal and retrieves the captcha image as Base64 string."""
+        if self.use_simulation or not self.driver:
+            if not self.use_simulation and not self.driver:
+                logger.info("Browser driver is None. Attempting to re-initialize browser...")
+                success = self.initialize_browser()
+                if not success:
+                    self.use_simulation = True
+
+            if self.use_simulation or not self.driver:
+                logger.info("Simulation mode active (or driver unavailable): generating mock CAPTCHA image.")
+                captcha_text, captcha_img = self.generate_mock_captcha()
+                self.captcha_solution = captcha_text
+                return captcha_img
+
         try:
             logger.info(f"Real Scraper: Opening results page: {self.portal_url}")
-            self.driver.get(self.portal_url)
+            self._safe_get(self.portal_url, timeout=10)
+            time.sleep(0.3)
             
             # Find captcha image element
-            captcha_img_el = self._find_element_by_candidates(self.captcha_img_candidates)
+            captcha_img_el = self._find_element_by_candidates(self.captcha_img_candidates, timeout=6)
+            if not captcha_img_el:
+                # Retry finding any img tag inside form
+                try:
+                    imgs = self.driver.find_elements(By.XPATH, "//form//img")
+                    if imgs:
+                        captcha_img_el = imgs[0]
+                except Exception:
+                    pass
+                    
             if not captcha_img_el:
                 raise RuntimeError("Could not find the CAPTCHA image element on the VTU results portal.")
                 
-            # Take screenshot of the captcha element directly
-            img_bytes = captcha_img_el.screenshot_as_png
+            # Take screenshot of the captcha element directly (verify non-zero rendering dimensions)
+            img_bytes = None
+            for _ in range(5):
+                try:
+                    size = captcha_img_el.size
+                    if size and size.get('width', 0) > 0 and size.get('height', 0) > 0:
+                        img_bytes = captcha_img_el.screenshot_as_png
+                        if img_bytes:
+                            break
+                except Exception:
+                    pass
+                time.sleep(0.3)
+
+            if not img_bytes:
+                time.sleep(0.5)
+                img_bytes = captcha_img_el.screenshot_as_png
+
             img_base64 = base64.b64encode(img_bytes).decode("utf-8")
             return f"data:image/png;base64,{img_base64}"
             
@@ -382,6 +438,57 @@ class VTUScraper:
 
     def submit_and_scrape(self, usn: str, captcha_input: str) -> dict:
         """Submits the USN and captcha, and scrapes the result."""
+        if self.use_simulation or not self.driver:
+            logger.info(f"Simulation Scraper: Submitting mock result for USN {usn}")
+            name_idx = abs(hash(usn)) % len(self.mock_names)
+            student_name = self.mock_names[name_idx]
+            
+            subjects = self.generate_mock_subjects(usn)
+            total_marks = 0
+            max_marks = 0
+            failed_any = False
+            
+            for sub in subjects:
+                # Deterministic marks based on USN + subject code
+                passed = (abs(hash(usn + sub["code"])) % 100) > 15
+                if passed:
+                    sub["internal"] = 30 + (abs(hash(usn + sub["code"])) % 19)
+                    sub["external"] = 35 + (abs(hash(usn + sub["code"] + "ext")) % 45)
+                    sub["total"] = sub["internal"] + sub["external"]
+                    sub["result"] = "P"
+                else:
+                    sub["internal"] = 15 + (abs(hash(usn + sub["code"])) % 10)
+                    sub["external"] = 10 + (abs(hash(usn + sub["code"] + "ext")) % 15)
+                    sub["total"] = sub["internal"] + sub["external"]
+                    sub["result"] = "F"
+                    failed_any = True
+                
+                total_marks += sub["total"]
+                max_marks += 100
+                
+            percentage = round((total_marks / max_marks) * 100, 2) if max_marks > 0 else 0.0
+            
+            if failed_any:
+                status = "FAIL"
+            elif percentage >= 70:
+                status = "FIRST CLASS WITH DISTINCTION"
+            elif percentage >= 60:
+                status = "FIRST CLASS"
+            else:
+                status = "SECOND CLASS"
+                
+            return {
+                "status": "success",
+                "data": {
+                    "usn": usn,
+                    "name": student_name.upper(),
+                    "total_marks": total_marks,
+                    "max_marks": max_marks,
+                    "percentage": percentage,
+                    "status": status,
+                    "subjects": subjects
+                }
+            }
 
         # Real scraping submission
         main_window = None
@@ -408,9 +515,17 @@ class VTUScraper:
             # Save original window handle
             main_window = self.driver.current_window_handle
             
-            # Click submit
+            # Click submit with timeout protection
             logger.info(f"Real Scraper: Submitting form for USN {usn} with captcha '{captcha_input}'")
-            submit_btn_el.click()
+            try:
+                self.driver.set_page_load_timeout(20)
+                submit_btn_el.click()
+            except Exception as click_err:
+                logger.warning(f"Submission page load timeout for {usn}: {click_err}. Interrupting background loader and checking DOM...")
+                try:
+                    self.driver.execute_script("window.stop();")
+                except Exception:
+                    pass
             
             # 1. Check for Javascript Alert immediately after submit (Usually "Invalid Captcha" or "USN not found")
             alert_text = None
@@ -433,7 +548,7 @@ class VTUScraper:
                     return {"status": "not_found", "message": f"University Seat Number is not available or Invalid ({alert_text})."}
 
             # Wait for result page / new tab to load
-            time.sleep(1.5)
+            time.sleep(1.0)
             
             # 2. Check for multiple windows (new tab/window opened by target="_blank")
             all_windows = self.driver.window_handles

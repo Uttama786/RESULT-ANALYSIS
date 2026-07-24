@@ -39,6 +39,21 @@ app.add_middleware(
 # Global dictionary to track session files
 session_registry: Dict[str, Dict[str, Any]] = {}
 
+def cleanup_old_sessions(max_sessions: int = 25):
+    """Clean up oldest session files and memory entries to prevent disk/memory bloat."""
+    global session_registry
+    if len(session_registry) > max_sessions:
+        keys_to_remove = list(session_registry.keys())[:-max_sessions]
+        for key in keys_to_remove:
+            session_data = session_registry.pop(key, None)
+            if session_data:
+                file_path = session_data.get("file_path")
+                if file_path and os.path.exists(file_path):
+                    try:
+                        os.remove(file_path)
+                    except Exception:
+                        pass
+
 def parse_usn_range(start_usn: str, end_usn: str) -> List[str]:
     """Generates a list of USNs from start to end range (inclusive). Handles same prefix or shortened right end (e.g. 120 or 4DM21CS120)."""
     start = start_usn.strip().upper()
@@ -161,6 +176,9 @@ async def websocket_scrape(websocket: WebSocket, session_id: str):
         end_usn = config.get("end_usn", "").strip()
         usn_list_str = config.get("usn_list", "").strip()
         portal_url = config.get("portal_url", "").strip()
+        existing_results = config.get("existing_results", [])
+        completed_usns_input = config.get("completed_usns", [])
+        start_from_usn = config.get("start_from_usn", "").strip().upper()
         
         # Build USN scraping list
         target_usns = []
@@ -177,11 +195,32 @@ async def websocket_scrape(websocket: WebSocket, session_id: str):
             await websocket.close()
             return
             
+        # Determine completed USNs for session resume
+        completed_usns = set(u.upper() for u in completed_usns_input)
+        if isinstance(existing_results, list):
+            for item in existing_results:
+                if isinstance(item, dict) and "usn" in item:
+                    completed_usns.add(item["usn"].upper())
+
+        if start_from_usn and start_from_usn in target_usns:
+            start_index = target_usns.index(start_from_usn)
+            for u in target_usns[:start_index]:
+                completed_usns.add(u)
+
+        already_done_count = len([u for u in target_usns if u in completed_usns])
+        remaining_count = len(target_usns) - already_done_count
+
         # Log parsed count
-        await safe_send({
-            "type": "log",
-            "message": f"Successfully loaded {len(target_usns)} target USNs into the scraping queue."
-        })
+        if already_done_count > 0:
+            await safe_send({
+                "type": "log",
+                "message": f"🔄 Resuming session: {already_done_count} USNs already completed. {remaining_count} remaining out of {len(target_usns)} target USNs."
+            })
+        else:
+            await safe_send({
+                "type": "log",
+                "message": f"Successfully loaded {len(target_usns)} target USNs into the scraping queue."
+            })
         
         # Step 2: Initialize crawler
         scraper = VTUScraper(session_id=session_id, custom_url=portal_url, use_simulation=False)
@@ -196,10 +235,14 @@ async def websocket_scrape(websocket: WebSocket, session_id: str):
             await websocket.close()
             return
             
-        scraped_results = []
+        scraped_results = list(existing_results) if isinstance(existing_results, list) else []
         
         # Step 3: Run Scraping loop for each USN
         for idx, usn in enumerate(target_usns):
+            # Skip if already processed in resumed session
+            if usn in completed_usns:
+                continue
+
             # Stream status
             await safe_send({
                 "type": "status_update",
@@ -323,6 +366,7 @@ async def websocket_scrape(websocket: WebSocket, session_id: str):
                 "data": scraped_results,
                 "analysis": analysis_data
             }
+            cleanup_old_sessions()
             
             await safe_send({
                 "type": "completed",

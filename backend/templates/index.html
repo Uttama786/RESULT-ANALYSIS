@@ -694,6 +694,7 @@
             const [isRefreshingCaptcha, setIsRefreshingCaptcha] = useState(false);
             const [sessionID, setSessionID] = useState("");
             const [analysisResults, setAnalysisResults] = useState(null);
+            const [processedUsns, setProcessedUsns] = useState(new Set());
             
             // UI modal & navigation state
             const [showGuideModal, setShowGuideModal] = useState(false);
@@ -717,8 +718,8 @@
                 setLogs(["Result Scraping Portal is loaded and ready. Configure params and execute."]);
             }, []);
 
-            // Start Scraper connection
-            const handleStartScrape = () => {
+            // Connect & Start/Resume Scraper connection
+            const handleConnectAndScrape = (isResume = false) => {
                 // Input validation
                 if (inputMode === "range" && (!startUsn || !endUsn)) {
                     alert("Please input starting and ending USN numbers.");
@@ -729,16 +730,33 @@
                     return;
                 }
 
-                // Reset states
-                setScrapedResults([]);
-                setAnalysisResults(null);
+                if (!isResume) {
+                    setScrapedResults([]);
+                    setProcessedUsns(new Set());
+                    setAnalysisResults(null);
+                    setProgress({ current: 0, total: 0, usn: "" });
+                }
+
                 setCaptchaRequired(null);
-                setProgress({ current: 0, total: 0, usn: "" });
                 setScrapingStatus("scraping");
                 
-                const uuidSession = "sess-" + Math.random().toString(36).substring(2, 15);
+                const uuidSession = sessionID && isResume ? sessionID : ("sess-" + Math.random().toString(36).substring(2, 15));
                 setSessionID(uuidSession);
-                setLogs(prev => [...prev, `[INIT] Generating new crawling session: ${uuidSession}`, `Connecting to scraper server...`]);
+
+                if (isResume) {
+                    setLogs(prev => [
+                        ...prev, 
+                        `[RESUME] Re-establishing connection for session: ${uuidSession}`,
+                        `[RESUME] Preserving ${scrapedResults.length} previously scraped student records...`,
+                        `Connecting to scraper server...`
+                    ]);
+                } else {
+                    setLogs(prev => [
+                        ...prev, 
+                        `[INIT] Generating new crawling session: ${uuidSession}`, 
+                        `Connecting to scraper server...`
+                    ]);
+                }
 
                 // Open WebSocket
                 const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -760,12 +778,15 @@
                         finalEnd = "";
                     }
 
-                    // Send configs
+                    // Send configs with resume parameters
                     const configPayload = {
                         start_usn: inputMode === "range" && !finalUsnList ? finalStart : "",
                         end_usn: inputMode === "range" && !finalUsnList ? finalEnd : "",
                         usn_list: inputMode === "list" ? finalUsnList : (finalUsnList || ""),
-                        portal_url: portalUrl
+                        portal_url: portalUrl,
+                        existing_results: isResume ? scrapedResults : [],
+                        completed_usns: isResume ? Array.from(processedUsns) : [],
+                        start_from_usn: isResume ? (progress.usn || "") : ""
                     };
                     ws.send(JSON.stringify(configPayload));
                 };
@@ -799,8 +820,15 @@
                         // Reset captcha modal if open
                         setCaptchaRequired(null);
                         
+                        if (msg.usn) {
+                            setProcessedUsns(prev => new Set(prev).add(msg.usn));
+                        }
+
                         if (msg.status === "SUCCESS") {
-                            setScrapedResults(prev => [...prev, msg.data]);
+                            setScrapedResults(prev => {
+                                const exists = prev.some(s => s.usn === msg.data.usn);
+                                return exists ? prev : [...prev, msg.data];
+                            });
                         }
                         setLogs(prev => [...prev, msg.message]);
                     }
@@ -818,7 +846,11 @@
                         ws.close();
                     }
                     else if (msg.type === "error") {
-                        setLogs(prev => [...prev, `❌ FATAL ERROR: ${msg.message}`]);
+                        setLogs(prev => [
+                            ...prev, 
+                            `❌ FATAL ERROR: ${msg.message}`,
+                            `💡 Tip: Connection or server issue occurred. You can click 'Continue Crawling' to resume from USN: ${progress.usn || 'failed position'}.`
+                        ]);
                         setScrapingStatus("error");
                         setCaptchaRequired(null);
                         ws.close();
@@ -826,12 +858,16 @@
                 };
 
                 ws.onerror = (err) => {
-                    setLogs(prev => [...prev, `[ERROR] Connection failed. Scraper server may be offline.`]);
+                    setLogs(prev => [
+                        ...prev, 
+                        `[ERROR] Connection failed. Scraper server may be offline.`,
+                        `💡 Tip: You can click 'Continue Crawling' to resume from where connection failed.`
+                    ]);
                     setScrapingStatus("error");
                 };
 
                 ws.onclose = () => {
-                    logger.info("WebSocket connection closed.");
+                    console.log("WebSocket connection closed.");
                 };
             };
 
@@ -1128,10 +1164,46 @@
                                         </svg>
                                         ABORT ACTIVE CRAWL
                                     </button>
+                                ) : (scrapedResults.length > 0 || (progress.current > 0 && progress.current < progress.total)) ? (
+                                    <div class="space-y-3">
+                                        <div class="p-3.5 bg-amber-500/15 border border-amber-500/30 rounded-xl flex flex-col gap-1 text-xs">
+                                            <div class="flex items-center justify-between font-bold text-amber-400">
+                                                <span class="flex items-center gap-1.5">
+                                                    <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                                                    <span>Connection / Session Interrupted</span>
+                                                </span>
+                                                <span class="text-[10px] px-2 py-0.5 bg-amber-500/20 rounded-full font-mono font-normal text-amber-300">
+                                                    {progress.total > 0 ? `${progress.current}/${progress.total} Processed` : `${scrapedResults.length} Scraped`}
+                                                </span>
+                                            </div>
+                                            <p class="text-[11px] text-gray-300 mt-0.5">
+                                                Last active USN: <span class="font-mono font-bold text-brandCyan">{progress.usn || "N/A"}</span>. Click Continue to resume without losing {scrapedResults.length} scraped students.
+                                            </p>
+                                        </div>
+                                        
+                                        <button 
+                                            type="button" 
+                                            onClick={() => handleConnectAndScrape(true)}
+                                            class="w-full bg-gradient-to-r from-brandGreen via-brandCyan to-brandPrimary rounded-xl py-3.5 text-sm font-bold text-white tracking-wider flex items-center justify-center gap-2 button-glow shadow-lg shadow-brandGreen/20 text-glow"
+                                        >
+                                            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                            </svg>
+                                            🔄 CONTINUE CRAWLING (From USN: {progress.usn || "Current Position"})
+                                        </button>
+                                        
+                                        <button 
+                                            type="button" 
+                                            onClick={() => handleConnectAndScrape(false)}
+                                            class="w-full bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl py-2.5 text-xs font-semibold text-gray-400 hover:text-white transition flex items-center justify-center gap-1.5"
+                                        >
+                                            <span>⚡ Start Fresh Crawl (Reset Progress)</span>
+                                        </button>
+                                    </div>
                                 ) : (
                                     <button 
                                         type="button" 
-                                        onClick={handleStartScrape}
+                                        onClick={() => handleConnectAndScrape(false)}
                                         class="w-full bg-gradient-to-r from-brandPrimary via-brandSecondary to-brandCyan rounded-xl py-3.5 text-sm font-bold text-white tracking-wider flex items-center justify-center gap-2 button-glow shadow-lg shadow-brandPrimary/30 text-glow"
                                     >
                                         <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
