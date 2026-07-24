@@ -486,23 +486,32 @@ Destination Address: {TARGET_FEEDBACK_EMAIL}
         except Exception as e:
             logger.error(f"⚠️ Resend API dispatch error: {e}")
 
-    # 2. Dispatch via Gmail SMTP if Gmail App Password / SMTP credentials are set
+    # 2. Dispatch via Gmail SMTP (Tries SSL Port 465 first for cloud host compatibility)
     if smtp_user and smtp_password:
+        msg = MIMEMultipart()
+        msg['From'] = smtp_user
+        msg['To'] = TARGET_FEEDBACK_EMAIL
+        msg['Subject'] = subject
+        msg.attach(MIMEText(body, 'plain', 'utf-8'))
+        
+        # Try Port 465 SSL first (bypasses Render outbound port 587 blocks)
         try:
-            msg = MIMEMultipart()
-            msg['From'] = smtp_user
-            msg['To'] = TARGET_FEEDBACK_EMAIL
-            msg['Subject'] = subject
-            msg.attach(MIMEText(body, 'plain', 'utf-8'))
-            
-            with smtplib.SMTP(smtp_server, smtp_port) as server:
-                server.starttls()
+            with smtplib.SMTP_SSL(smtp_server, 465, timeout=10) as server:
                 server.login(smtp_user, smtp_password)
                 server.send_message(msg)
-            logger.info(f"✅ Feedback email successfully dispatched via SMTP to {TARGET_FEEDBACK_EMAIL}")
+            logger.info(f"✅ Feedback email successfully dispatched via SMTP_SSL (Port 465) to {TARGET_FEEDBACK_EMAIL}")
             return
-        except Exception as e:
-            logger.error(f"❌ Failed to dispatch SMTP feedback email to {TARGET_FEEDBACK_EMAIL}: {e}")
+        except Exception as ssl_err:
+            logger.warning(f"SMTP_SSL (Port 465) attempt: {ssl_err}. Trying TLS Port 587...")
+            try:
+                with smtplib.SMTP(smtp_server, 587, timeout=10) as server:
+                    server.starttls()
+                    server.login(smtp_user, smtp_password)
+                    server.send_message(msg)
+                logger.info(f"✅ Feedback email successfully dispatched via SMTP (Port 587) to {TARGET_FEEDBACK_EMAIL}")
+                return
+            except Exception as e:
+                logger.error(f"❌ Failed to dispatch SMTP feedback email to {TARGET_FEEDBACK_EMAIL}: {e}")
 
     logger.info(f"ℹ️ Feedback saved in feedbacks.json. To enable live email delivery to {TARGET_FEEDBACK_EMAIL}, set GMAIL_APP_PASSWORD or RESEND_API_KEY.")
 
