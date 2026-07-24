@@ -245,7 +245,7 @@ class ResultAnalyzer:
 
         # Row 1: Title Block
         ws.row_dimensions[1].height = 25
-        title_col_end = 3 + 3 * N + 3 # SL.No, Name, USN + 3*N subjects + TOTAL, Remarks, Backlogs
+        title_col_end = 3 + 3 * N + 4 # SL.No, Name, USN + 3*N subjects + TOTAL, PERCENTAGE (%), Remarks, Backlogs
         ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=title_col_end)
         title_cell = ws.cell(row=1, column=1)
         title_cell.value = f"{semester} Student Result  {batch}"
@@ -283,15 +283,21 @@ class ResultAnalyzer:
         ws.merge_cells(start_row=2, start_column=tot_col, end_row=4, end_column=tot_col)
         ws.cell(row=2, column=tot_col, value="TOTAL")
         style_cells(2, tot_col, 4, tot_col, header_font, header_fill, Alignment(horizontal="center", vertical="center"), thin_border)
+
+        # Merge PERCENTAGE (%)
+        pct_col = sub_marks_col_end + 2
+        ws.merge_cells(start_row=2, start_column=pct_col, end_row=4, end_column=pct_col)
+        ws.cell(row=2, column=pct_col, value="PERCENTAGE (%)")
+        style_cells(2, pct_col, 4, pct_col, header_font, header_fill, Alignment(horizontal="center", vertical="center", wrap_text=True), thin_border)
         
         # Merge Remarks
-        rem_col = sub_marks_col_end + 2
+        rem_col = sub_marks_col_end + 3
         ws.merge_cells(start_row=2, start_column=rem_col, end_row=4, end_column=rem_col)
         ws.cell(row=2, column=rem_col, value="Remarks")
         style_cells(2, rem_col, 4, rem_col, header_font, header_fill, Alignment(horizontal="center", vertical="center"), thin_border)
         
         # Merge No. of Backlogs
-        back_col = sub_marks_col_end + 3
+        back_col = sub_marks_col_end + 4
         ws.merge_cells(start_row=2, start_column=back_col, end_row=4, end_column=back_col)
         ws.cell(row=2, column=back_col, value="No. of Backlogs")
         style_cells(2, back_col, 4, back_col, header_font, header_fill, Alignment(horizontal="center", vertical="center", wrap_text=True), thin_border)
@@ -364,6 +370,11 @@ class ResultAnalyzer:
             # TOTAL
             ws.cell(row=row_idx, column=tot_col, value=r["total_marks"])
             style_cells(row_idx, tot_col, row_idx, tot_col, bold_data_font, zebra_fill if is_zebra else None, Alignment(horizontal="center"), light_border)
+
+            # PERCENTAGE (%)
+            pct_val = f"{r.get('percentage', 0.0):.2f}%"
+            ws.cell(row=row_idx, column=pct_col, value=pct_val)
+            style_cells(row_idx, pct_col, row_idx, pct_col, bold_data_font, zebra_fill if is_zebra else None, Alignment(horizontal="center"), light_border)
             
             # Remarks
             status_str = r["status"].upper()
@@ -399,6 +410,7 @@ class ResultAnalyzer:
             ws.column_dimensions[get_column_letter(c_start + 1)].width = 6
             ws.column_dimensions[get_column_letter(c_start + 2)].width = 6
         ws.column_dimensions[get_column_letter(tot_col)].width = 10
+        ws.column_dimensions[get_column_letter(pct_col)].width = 16
         ws.column_dimensions[get_column_letter(rem_col)].width = 28
         ws.column_dimensions[get_column_letter(back_col)].width = 15
 
