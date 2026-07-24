@@ -426,16 +426,19 @@ class FeedbackRequest(BaseModel):
 def send_feedback_email_async(entry: dict):
     """
     Sends email notification of user feedback directly to uttamabhise@gmail.com.
-    Dispatches via SMTP if environment variables (SMTP_USER, SMTP_PASSWORD) are set.
+    Dispatches via Resend Email API Key or Gmail App Password (SMTP) when provided.
     """
     import smtplib
+    import json
+    import urllib.request
     from email.mime.text import MIMEText
     from email.mime.multipart import MIMEMultipart
     
+    resend_api_key = os.getenv("RESEND_API_KEY", "").strip()
+    smtp_user = os.getenv("SMTP_USER", "").strip() or os.getenv("GMAIL_USER", "uttamabhise@gmail.com").strip()
+    smtp_password = os.getenv("SMTP_PASSWORD", "").strip() or os.getenv("GMAIL_APP_PASSWORD", "").strip()
     smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
     smtp_port = int(os.getenv("SMTP_PORT", "587"))
-    smtp_user = os.getenv("SMTP_USER", "")
-    smtp_password = os.getenv("SMTP_PASSWORD", "")
     
     subject = f"[VTU Result Platform Feedback] {entry['category']} - {'⭐' * entry['rating']}"
     
@@ -454,8 +457,36 @@ Feedback Comment:
 Feedback Entry ID: {entry['id']}
 Destination Address: {TARGET_FEEDBACK_EMAIL}
 """
-    logger.info(f"📧 [FEEDBACK ROUTER] Directing feedback entry to: {TARGET_FEEDBACK_EMAIL}")
+
+    logger.info(f"📧 [FEEDBACK ROUTER] Processing feedback notification for: {TARGET_FEEDBACK_EMAIL}")
     
+    # 1. Dispatch via Resend Email API if RESEND_API_KEY is configured
+    if resend_api_key:
+        try:
+            req_data = json.dumps({
+                "from": "VTU Result Analyzer <onboarding@resend.dev>",
+                "to": [TARGET_FEEDBACK_EMAIL],
+                "subject": subject,
+                "text": body
+            }).encode("utf-8")
+            
+            req = urllib.request.Request(
+                "https://api.resend.com/emails",
+                data=req_data,
+                headers={
+                    "Authorization": f"Bearer {resend_api_key}",
+                    "Content-Type": "application/json"
+                },
+                method="POST"
+            )
+            with urllib.request.urlopen(req) as resp:
+                if resp.status in [200, 201]:
+                    logger.info(f"✅ Feedback email successfully delivered via Resend API to {TARGET_FEEDBACK_EMAIL}")
+                    return
+        except Exception as e:
+            logger.error(f"⚠️ Resend API dispatch error: {e}")
+
+    # 2. Dispatch via Gmail SMTP if Gmail App Password / SMTP credentials are set
     if smtp_user and smtp_password:
         try:
             msg = MIMEMultipart()
@@ -468,9 +499,12 @@ Destination Address: {TARGET_FEEDBACK_EMAIL}
                 server.starttls()
                 server.login(smtp_user, smtp_password)
                 server.send_message(msg)
-            logger.info(f"✅ Feedback email successfully dispatched to {TARGET_FEEDBACK_EMAIL}")
+            logger.info(f"✅ Feedback email successfully dispatched via SMTP to {TARGET_FEEDBACK_EMAIL}")
+            return
         except Exception as e:
             logger.error(f"❌ Failed to dispatch SMTP feedback email to {TARGET_FEEDBACK_EMAIL}: {e}")
+
+    logger.info(f"ℹ️ Feedback saved in feedbacks.json. To enable live email delivery to {TARGET_FEEDBACK_EMAIL}, set GMAIL_APP_PASSWORD or RESEND_API_KEY.")
 
 @app.post("/api/feedback")
 def submit_feedback(feedback: FeedbackRequest):
