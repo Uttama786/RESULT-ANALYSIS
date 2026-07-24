@@ -443,6 +443,27 @@ class ResultAnalyzer:
             back_font = Font(name="Segoe UI", size=10, bold=True, color="9C0006") if backlogs > 0 else data_font
             back_fill = red_fill if backlogs > 0 else (zebra_fill if is_zebra else None)
             style_cells(row_idx, back_col, row_idx, back_col, back_font, back_fill, Alignment(horizontal="center"), light_border)
+
+        # Add Color Format Key / Legend Box for clear reference by external users
+        legend_start_row = 5 + len(self.records) + 2
+        
+        ws.cell(row=legend_start_row, column=1, value="COLOR FORMAT KEY / LEGEND:")
+        ws.cell(row=legend_start_row, column=1).font = Font(name="Segoe UI", size=10, bold=True, color="1F4E78")
+        
+        # Legend Item 1: Soft Green (PASS / DISTINCTION)
+        ws.merge_cells(start_row=legend_start_row+1, start_column=1, end_row=legend_start_row+1, end_column=3)
+        ws.cell(row=legend_start_row+1, column=1, value="PASS / FIRST CLASS / DISTINCTION")
+        style_cells(legend_start_row+1, 1, legend_start_row+1, 3, Font(name="Segoe UI", size=9, bold=True, color="006100"), green_fill, Alignment(horizontal="center", vertical="center"), thin_border)
+
+        # Legend Item 2: Soft Red (FAIL / BACKLOG)
+        ws.merge_cells(start_row=legend_start_row+1, start_column=4, end_row=legend_start_row+1, end_column=6)
+        ws.cell(row=legend_start_row+1, column=4, value="FAILED SUBJECT / FAIL RESULT / BACKLOG")
+        style_cells(legend_start_row+1, 4, legend_start_row+1, 6, Font(name="Segoe UI", size=9, bold=True, color="9C0006"), red_fill, Alignment(horizontal="center", vertical="center"), thin_border)
+
+        # Legend Item 3: Soft Yellow (SPECIAL STATUS)
+        ws.merge_cells(start_row=legend_start_row+1, start_column=7, end_row=legend_start_row+1, end_column=12)
+        ws.cell(row=legend_start_row+1, column=7, value="SPECIAL STATUS (A: ABSENT | W: WITHHELD | NE: NOT ELIGIBLE | NA: NOT APPLICABLE)")
+        style_cells(legend_start_row+1, 7, legend_start_row+1, 12, Font(name="Segoe UI", size=9, bold=True, color="9C6500"), yellow_fill, Alignment(horizontal="center", vertical="center"), thin_border)
             
         # Column widths
         ws.column_dimensions["A"].width = 8
