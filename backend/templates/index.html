@@ -36,7 +36,7 @@
 
     <!-- Custom CSS styles for premium glassmorphism and animations -->
     <style>
-        body {
+        body.dark-mode {
             background-color: #090a0f;
             background-image: 
                 radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
@@ -47,7 +47,19 @@
             min-height: 100vh;
         }
 
-        .glass-panel {
+        body.light-mode {
+            background-color: #f8fafc;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.08) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(6, 182, 212, 0.08) 0px, transparent 50%);
+            background-attachment: fixed;
+            color: #1e293b;
+            font-family: 'Outfit', sans-serif;
+            min-height: 100vh;
+        }
+
+        /* Glass Panels - Dark Mode */
+        body.dark-mode .glass-panel {
             background: rgba(15, 18, 30, 0.65);
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
@@ -55,12 +67,59 @@
             box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
         }
 
-        .glass-panel-heavy {
+        body.dark-mode .glass-panel-heavy {
             background: rgba(10, 12, 20, 0.9);
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
             border: 1px solid rgba(255, 255, 255, 0.1);
             box-shadow: 0 16px 48px 0 rgba(0, 0, 0, 0.6);
+        }
+
+        /* Glass Panels - Light Mode */
+        body.light-mode .glass-panel {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(226, 232, 240, 0.8);
+            box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.03);
+        }
+
+        body.light-mode .glass-panel-heavy {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(203, 213, 225, 0.9);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+        }
+
+        /* Light Mode Text & Input Adjustments */
+        body.light-mode h3, body.light-mode h2, body.light-mode h1 {
+            color: #0f172a;
+        }
+        body.light-mode .text-gray-300 {
+            color: #334155 !important;
+        }
+        body.light-mode .text-gray-400 {
+            color: #64748b !important;
+        }
+        body.light-mode .text-white {
+            color: #0f172a !important;
+        }
+        body.light-mode input[type="text"], 
+        body.light-mode input[type="url"],
+        body.light-mode select {
+            background-color: #f1f5f9 !important;
+            border-color: #cbd5e1 !important;
+            color: #0f172a !important;
+        }
+        body.light-mode .bg-black\/40,
+        body.light-mode .bg-black\/30,
+        body.light-mode .bg-black\/20 {
+            background-color: #f1f5f9 !important;
+        }
+        body.light-mode .bg-white\/5 {
+            background-color: #f8fafc !important;
+            border-color: #e2e8f0 !important;
         }
 
         .text-glow {
@@ -124,8 +183,8 @@
 
         // --- Core UI Components ---
 
-        // Custom Header with breething connection status indicator
-        const Header = ({ status }) => {
+        // Custom Header with breathing connection status indicator, author attribution, nav buttons and theme toggle
+        const Header = ({ status, theme, onToggleTheme, onOpenGuide, onOpenAbout }) => {
             let statusColor = "bg-yellow-500 shadow-[0_0_10px_#eab308]";
             let statusText = "Ready";
             
@@ -141,26 +200,260 @@
             }
 
             return (
-                <header class="w-full flex flex-col md:flex-row items-center justify-between p-6 mb-8 glass-panel rounded-2xl">
-                    <div class="flex items-center gap-4">
-                        <div class="p-3 bg-brandPrimary/10 rounded-xl border border-brandPrimary/20">
-                            <svg class="w-8 h-8 text-brandPrimary" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <header class="w-full flex flex-col md:flex-row items-center justify-between p-4 sm:p-6 mb-6 sm:mb-8 glass-panel rounded-2xl gap-4">
+                    <div class="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-3 sm:gap-4 w-full md:w-auto">
+                        <div class="p-2.5 sm:p-3 bg-brandPrimary/10 rounded-xl border border-brandPrimary/20 flex-shrink-0">
+                            <svg class="w-7 h-7 sm:w-8 sm:h-8 text-brandPrimary" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 002 2h2a2 2 0 002-2z" />
                             </svg>
                         </div>
                         <div>
-                            <h1 class="text-2xl font-extrabold tracking-tight bg-gradient-to-r from-brandPrimary via-brandSecondary to-brandCyan bg-clip-text text-transparent text-glow">
-                                VTU RESULT ANALYSIS TOOL
-                            </h1>
-                            <p class="text-xs text-gray-400 font-medium">Visual Scraping Engine & Academic Performance Dashboard</p>
+                            <div class="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                                <h1 class="text-xl sm:text-2xl font-extrabold tracking-tight bg-gradient-to-r from-brandPrimary via-brandSecondary to-brandCyan bg-clip-text text-transparent text-glow">
+                                    VTU RESULT ANALYSIS TOOL
+                                </h1>
+                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/10 border border-indigo-500/30 text-indigo-400">
+                                    By Uttam ✨
+                                </span>
+                            </div>
+                            <p class="text-[11px] sm:text-xs text-gray-400 font-medium mt-0.5">Visual Scraping Engine & Academic Performance Dashboard</p>
                         </div>
                     </div>
                     
-                    <div class="mt-4 md:mt-0 flex items-center gap-3 px-4 py-2 bg-white/5 rounded-full border border-white/5">
-                        <span class={`w-2.5 h-2.5 rounded-full ${statusColor}`}></span>
-                        <span class="text-xs font-semibold uppercase tracking-wider text-gray-300">{statusText}</span>
+                    <div class="flex flex-wrap items-center justify-center sm:justify-end gap-2 sm:gap-2.5 w-full md:w-auto">
+                        {/* Navigation Bar Action Buttons */}
+                        <button 
+                            type="button"
+                            onClick={onOpenGuide}
+                            class="px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold text-gray-300 hover:text-white transition flex items-center gap-1.5"
+                        >
+                            <span>📖 How to Use</span>
+                        </button>
+                        <button 
+                            type="button"
+                            onClick={onOpenAbout}
+                            class="px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold text-gray-300 hover:text-white transition flex items-center gap-1.5"
+                        >
+                            <span>ℹ️ About Project</span>
+                        </button>
+                        
+                        {/* Day / Night Mode Toggle Switch */}
+                        <button 
+                            type="button"
+                            onClick={onToggleTheme}
+                            title={theme === "dark" ? "Switch to Day Mode" : "Switch to Night Mode"}
+                            class={`px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl border transition flex items-center gap-1.5 sm:gap-2 text-xs font-bold shadow-sm ${
+                                theme === "dark" 
+                                    ? 'bg-white/5 hover:bg-white/10 border-white/10 text-amber-400' 
+                                    : 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-indigo-600'
+                            }`}
+                        >
+                            {theme === "dark" ? (
+                                <>
+                                    <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                                    </svg>
+                                    <span>Day Mode ☀️</span>
+                                </>
+                            ) : (
+                                <>
+                                    <svg class="w-4 h-4 text-indigo-600" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                                    </svg>
+                                    <span>Night Mode 🌙</span>
+                                </>
+                            )}
+                        </button>
+
+                        <div class="flex items-center gap-2 px-3 py-2 bg-white/5 rounded-xl border border-white/5">
+                            <span class={`w-2.5 h-2.5 rounded-full ${statusColor}`}></span>
+                            <span class="text-xs font-semibold uppercase tracking-wider text-gray-300">{statusText}</span>
+                        </div>
                     </div>
                 </header>
+            );
+        };
+
+        // --- How to Use Guide Modal ---
+        const GuideModal = ({ isOpen, onClose }) => {
+            if (!isOpen) return null;
+            return (
+                <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+                    <div class="w-full max-w-2xl glass-panel-heavy p-6 md:p-8 rounded-3xl border border-white/10 shadow-2xl max-h-[90vh] overflow-y-auto scrollbar-thin">
+                        <div class="flex items-center justify-between pb-4 border-b border-white/10 mb-6">
+                            <div class="flex items-center gap-3">
+                                <span class="text-2xl">📖</span>
+                                <div>
+                                    <h3 class="text-xl font-bold text-white">How to Use the Crawler</h3>
+                                    <p class="text-xs text-gray-400">Step-by-Step Guide for Automated VTU Result Crawling</p>
+                                </div>
+                            </div>
+                            <button onClick={onClose} class="text-gray-400 hover:text-white p-2 rounded-xl bg-white/5 border border-white/5 font-bold">✕</button>
+                        </div>
+
+                        <div class="space-y-6 text-sm text-gray-300">
+                            <div class="p-4 bg-white/5 rounded-2xl border border-white/5 space-y-2">
+                                <h4 class="font-bold text-brandCyan flex items-center gap-2">
+                                    <span>1️⃣ Step 1: Input USN Range or USN List</span>
+                                </h4>
+                                <p class="text-xs text-gray-300 leading-relaxed">
+                                    Choose <strong>USN Range</strong> mode to specify starting and ending USNs (e.g., <code>1SG23CS001</code> to <code>1SG23CS060</code>), with optional 400-series lateral entry ranges. Alternatively, choose <strong>USN List</strong> mode to paste comma-separated USNs or custom ranges.
+                                </p>
+                            </div>
+
+                            <div class="p-4 bg-white/5 rounded-2xl border border-white/5 space-y-2">
+                                <h4 class="font-bold text-brandPrimary flex items-center gap-2">
+                                    <span>2️⃣ Step 2: Automated Live Scraping</span>
+                                </h4>
+                                <p class="text-xs text-gray-300 leading-relaxed">
+                                    Click <strong>🚀 Initiate Live Scraper Session</strong> to launch automated Chrome WebDriver navigation connecting directly to <code>results.vtu.ac.in</code>.
+                                </p>
+                            </div>
+
+                            <div class="p-4 bg-white/5 rounded-2xl border border-white/5 space-y-2">
+                                <h4 class="font-bold text-brandGreen flex items-center gap-2">
+                                    <span>3️⃣ Step 3: Interactive Captcha Verification & Invalid USN Handling</span>
+                                </h4>
+                                <p class="text-xs text-gray-300 leading-relaxed">
+                                    When scraping live, an interactive <strong>Captcha Modal</strong> appears with the real captcha screenshot. Type the 6 characters and hit enter. If blurry, click <strong>🔄 Refresh Captcha</strong> to reload a fresh image. If a student USN is invalid or unannounced, the scraper automatically skips it!
+                                </p>
+                            </div>
+
+                            <div class="p-4 bg-white/5 rounded-2xl border border-white/5 space-y-2">
+                                <h4 class="font-bold text-brandSecondary flex items-center gap-2">
+                                    <span>4️⃣ Step 4: Analytics Dashboard & Excel Report Export</span>
+                                </h4>
+                                <p class="text-xs text-gray-300 leading-relaxed">
+                                    Once complete, inspect pass rates, top 10 toppers, subject metrics, and backlog lists. Click <strong>Download Bundled Report (.XLSX)</strong> to save a multi-sheet formatted Excel workbook.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="mt-6 pt-4 border-t border-white/10 flex justify-end">
+                            <button onClick={onClose} class="px-6 py-2.5 bg-brandPrimary rounded-xl text-white font-bold text-xs button-glow">Got It, Let's Crawl!</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- About Project Modal ---
+        const AboutModal = ({ isOpen, onClose }) => {
+            if (!isOpen) return null;
+            return (
+                <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+                    <div class="w-full max-w-2xl glass-panel-heavy p-6 md:p-8 rounded-3xl border border-white/10 shadow-2xl max-h-[90vh] overflow-y-auto scrollbar-thin">
+                        <div class="flex items-center justify-between pb-4 border-b border-white/10 mb-6">
+                            <div class="flex items-center gap-3">
+                                <span class="text-2xl">ℹ️</span>
+                                <div>
+                                    <h3 class="text-xl font-bold text-white">About VTU Result Analysis Platform</h3>
+                                    <p class="text-xs text-gray-400">High-Performance Visual Scraping Engine & Academic Analytics Hub</p>
+                                </div>
+                            </div>
+                            <button onClick={onClose} class="text-gray-400 hover:text-white p-2 rounded-xl bg-white/5 border border-white/5 font-bold">✕</button>
+                        </div>
+
+                        <div class="space-y-5 text-xs text-gray-300 leading-relaxed">
+                            <p>
+                                The <strong>VTU Result Analysis Tool</strong> is a full-stack automated intelligence platform built to crawl, parse, analyze, and visualize Visvesvaraya Technological University (VTU) semester examination results for engineering institutions.
+                            </p>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                                <div class="p-3 bg-white/5 rounded-xl border border-white/5">
+                                    <span class="font-bold text-brandCyan">⚡ Real-time Async Architecture</span>
+                                    <p class="text-[11px] text-gray-400 mt-1">FastAPI + WebSockets streaming live execution logs, attempt metrics, and instant browser popups.</p>
+                                </div>
+                                <div class="p-3 bg-white/5 rounded-xl border border-white/5">
+                                    <span class="font-bold text-brandGreen">🤖 Selenium Engine & Captcha Handler</span>
+                                    <p class="text-[11px] text-gray-400 mt-1">Automated Chrome WebDriver navigation with real-time captcha screenshot streaming & refresh options.</p>
+                                </div>
+                                <div class="p-3 bg-white/5 rounded-xl border border-white/5">
+                                    <span class="font-bold text-brandPrimary">📊 Interactive ApexCharts Analytics</span>
+                                    <p class="text-[11px] text-gray-400 mt-1">Visual graphs for subject-wise pass percentages, class score averages, and pass/fail donut ratios.</p>
+                                </div>
+                                <div class="p-3 bg-white/5 rounded-xl border border-white/5">
+                                    <span class="font-bold text-brandSecondary">📂 Multi-Sheet OpenPyXL Exports</span>
+                                    <p class="text-[11px] text-gray-400 mt-1">Automated creation of color-coded Excel workbooks with topper lists, subject performance, and remedial directories.</p>
+                                </div>
+                            </div>
+
+                            <div class="p-4 bg-gradient-to-r from-indigo-950/40 to-violet-950/40 border border-indigo-500/30 rounded-2xl text-center mt-4">
+                                <span class="text-xs font-bold text-indigo-300 uppercase tracking-widest block mb-1">Author & Developer</span>
+                                <h4 class="text-lg font-extrabold text-white text-glow">Designed & Developed by Uttam</h4>
+                                <p class="text-[11px] text-indigo-300/80 mt-0.5">YIT Result Analysis & Academic Automation Infrastructure</p>
+                            </div>
+                        </div>
+
+                        <div class="mt-6 pt-4 border-t border-white/10 flex justify-end">
+                            <button onClick={onClose} class="px-6 py-2.5 bg-brandPrimary rounded-xl text-white font-bold text-xs button-glow">Close Overview</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Footer Component ---
+        const Footer = ({ onOpenGuide, onOpenAbout }) => {
+            return (
+                <footer class="w-full mt-16 pt-8 pb-8 border-t border-white/10 glass-panel rounded-2xl px-6 md:px-10">
+                    <div class="grid grid-cols-1 md:grid-cols-12 gap-8 mb-8">
+                        {/* Brand & Overview */}
+                        <div class="md:col-span-5 space-y-3">
+                            <div class="flex items-center gap-3">
+                                <div class="p-2 bg-brandPrimary/10 rounded-lg border border-brandPrimary/20">
+                                    <svg class="w-5 h-5 text-brandPrimary" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 002 2h2a2 2 0 002-2z" />
+                                    </svg>
+                                </div>
+                                <span class="font-extrabold text-base tracking-tight bg-gradient-to-r from-brandPrimary via-brandSecondary to-brandCyan bg-clip-text text-transparent">
+                                    VTU RESULT ANALYSIS TOOL
+                                </span>
+                            </div>
+                            <p class="text-xs text-gray-400 leading-relaxed max-w-sm">
+                                High-performance automated web scraping engine and deep academic analytics platform designed for engineering batch result extraction and reporting.
+                            </p>
+                            <div class="flex items-center gap-2 pt-1">
+                                <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-brandPrimary/10 border border-brandPrimary/20 text-brandPrimary">
+                                    v1.2.0 Production
+                                </span>
+                                <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-brandGreen/10 border border-brandGreen/20 text-brandGreen">
+                                    FastAPI + Selenium + React
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Quick Navigation */}
+                        <div class="md:col-span-3 space-y-2">
+                            <h4 class="text-xs font-bold text-white uppercase tracking-wider mb-3">Quick Actions</h4>
+                            <ul class="space-y-2 text-xs text-gray-400">
+                                <li><button onClick={onOpenGuide} class="hover:text-brandCyan transition flex items-center gap-1.5"><span>📖</span> How to Use Guide</button></li>
+                                <li><button onClick={onOpenAbout} class="hover:text-brandCyan transition flex items-center gap-1.5"><span>ℹ️</span> About Project & Architecture</button></li>
+                                <li><a href="#root" class="hover:text-brandCyan transition flex items-center gap-1.5"><span>⬆️</span> Back to Top</a></li>
+                            </ul>
+                        </div>
+
+                        {/* Author Info */}
+                        <div class="md:col-span-4 space-y-3 p-4 bg-white/5 rounded-2xl border border-white/5">
+                            <h4 class="text-xs font-bold text-white uppercase tracking-wider">Project Author</h4>
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-brandPrimary to-brandCyan flex items-center justify-center text-white font-extrabold text-sm shadow-md">
+                                    U
+                                </div>
+                                <div>
+                                    <h5 class="text-sm font-bold text-white">Uttam</h5>
+                                    <p class="text-[11px] text-brandCyan font-mono font-medium">YIT Result Analysis Developer</p>
+                                </div>
+                            </div>
+                            <p class="text-[11px] text-gray-400">Designed and built with precision for automated VTU academic result analysis.</p>
+                        </div>
+                    </div>
+
+                    <div class="pt-6 border-t border-white/5 flex flex-col md:flex-row items-center justify-between text-[11px] text-gray-500 gap-2">
+                        <p>© 2026 VTU Result Analysis Platform. Developed by <span class="text-gray-300 font-bold">Uttam</span>.</p>
+                        <p class="font-mono">Engineered for Academic Excellence ✨</p>
+                    </div>
+                </footer>
             );
         };
 
@@ -200,7 +493,7 @@
         };
 
         // ApexCharts React hooks wrapper for subject comparison
-        const SubjectAnalyticsChart = ({ subjectData }) => {
+        const SubjectAnalyticsChart = ({ subjectData, appTheme = "dark" }) => {
             const chartContainerRef = useRef(null);
 
             useEffect(() => {
@@ -209,6 +502,7 @@
                 const categories = subjectData.map(s => s.code);
                 const passPercentages = subjectData.map(s => s.pass_percentage);
                 const averageScores = subjectData.map(s => s.average_marks);
+                const isDark = appTheme === "dark";
 
                 const options = {
                     series: [
@@ -229,7 +523,7 @@
                         background: 'transparent',
                         toolbar: { show: false }
                     },
-                    theme: { mode: 'dark' },
+                    theme: { mode: isDark ? 'dark' : 'light' },
                     stroke: {
                         width: [0, 3],
                         curve: 'smooth'
@@ -239,7 +533,7 @@
                         opacity: [0.85, 1],
                         gradient: {
                             inverseColors: false,
-                            shade: 'dark',
+                            shade: isDark ? 'dark' : 'light',
                             type: "vertical",
                             opacityFrom: 0.85,
                             opacityTo: 0.55,
@@ -248,7 +542,7 @@
                     labels: categories,
                     xaxis: {
                         type: 'category',
-                        labels: { style: { colors: '#9ca3af', fontFamily: 'Outfit' } }
+                        labels: { style: { colors: isDark ? '#9ca3af' : '#475569', fontFamily: 'Outfit' } }
                     },
                     yaxis: [
                         {
@@ -257,7 +551,7 @@
                                 style: { color: '#6366f1', fontFamily: 'Outfit' }
                             },
                             labels: {
-                                style: { colors: '#9ca3af' },
+                                style: { colors: isDark ? '#9ca3af' : '#475569' },
                                 formatter: (val) => `${val}%`
                             },
                             min: 0,
@@ -269,14 +563,14 @@
                                 text: 'Average Score',
                                 style: { color: '#06b6d4', fontFamily: 'Outfit' }
                             },
-                            labels: { style: { colors: '#9ca3af' } },
+                            labels: { style: { colors: isDark ? '#9ca3af' : '#475569' } },
                             min: 0,
                             max: 100
                         }
                     ],
-                    grid: { borderColor: 'rgba(255,255,255,0.06)' },
+                    grid: { borderColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' },
                     tooltip: {
-                        theme: 'dark',
+                        theme: isDark ? 'dark' : 'light',
                         shared: true,
                         intersect: false,
                         y: {
@@ -290,7 +584,7 @@
                     },
                     legend: {
                         fontFamily: 'Outfit',
-                        labels: { colors: '#e5e7eb' }
+                        labels: { colors: isDark ? '#e5e7eb' : '#334155' }
                     }
                 };
 
@@ -298,17 +592,19 @@
                 chart.render();
 
                 return () => chart.destroy();
-            }, [subjectData]);
+            }, [subjectData, appTheme]);
 
             return <div ref={chartContainerRef} />;
         };
 
         // Donut Chart for Pass / Fail ratio
-        const PassFailDonutChart = ({ summary }) => {
+        const PassFailDonutChart = ({ summary, appTheme = "dark" }) => {
             const containerRef = useRef(null);
 
             useEffect(() => {
                 if (!containerRef.current || !summary) return;
+
+                const isDark = appTheme === "dark";
 
                 const options = {
                     series: [summary.passed_count, summary.failed_count],
@@ -319,7 +615,7 @@
                     },
                     labels: ['Passed', 'Failed'],
                     colors: ['#10b981', '#f43f5e'],
-                    theme: { mode: 'dark' },
+                    theme: { mode: isDark ? 'dark' : 'light' },
                     stroke: { show: false },
                     plotOptions: {
                         pie: {
@@ -327,10 +623,10 @@
                                 size: '70%',
                                 labels: {
                                     show: true,
-                                    name: { fontFamily: 'Outfit', color: '#e5e7eb' },
+                                    name: { fontFamily: 'Outfit', color: isDark ? '#e5e7eb' : '#334155' },
                                     value: {
                                         fontFamily: 'Outfit',
-                                        color: '#ffffff',
+                                        color: isDark ? '#ffffff' : '#0f172a',
                                         fontSize: '22px',
                                         fontWeight: '800',
                                         formatter: (val) => val
@@ -339,7 +635,7 @@
                                         show: true,
                                         label: 'Total',
                                         fontFamily: 'Outfit',
-                                        color: '#9ca3af',
+                                        color: isDark ? '#9ca3af' : '#64748b',
                                         formatter: () => summary.total_students
                                     }
                                 }
@@ -350,96 +646,58 @@
                     legend: {
                         position: 'bottom',
                         fontFamily: 'Outfit',
-                        labels: { colors: '#e5e7eb' }
+                        labels: { colors: isDark ? '#e5e7eb' : '#334155' }
                     },
-                    tooltip: { theme: 'dark' }
+                    tooltip: { theme: isDark ? 'dark' : 'light' }
                 };
 
                 const chart = new ApexCharts(containerRef.current, options);
                 chart.render();
 
                 return () => chart.destroy();
-            }, [summary]);
+            }, [summary, appTheme]);
 
             return <div ref={containerRef} />;
         };
 
         // --- Main App Component ---
         const App = () => {
+            // Theme state (Dark/Night mode vs Light/Day mode)
+            const [theme, setTheme] = useState(() => {
+                return localStorage.getItem("vtu_theme") || "dark";
+            });
+
+            useEffect(() => {
+                document.body.className = theme === "dark" ? "dark-mode" : "light-mode";
+                localStorage.setItem("vtu_theme", theme);
+            }, [theme]);
+
+            const toggleTheme = () => {
+                setTheme(prev => (prev === "dark" ? "light" : "dark"));
+            };
+
             // State configs
             const [portalUrl, setPortalUrl] = useState("https://results.vtu.ac.in/");
-            const [useSimulation, setUseSimulation] = useState(false);
             const [inputMode, setInputMode] = useState("range"); // range vs list
             const [startUsn, setStartUsn] = useState("");
             const [endUsn, setEndUsn] = useState("");
             const [usnList, setUsnList] = useState("");
-
-            // --- Universal College Quick Builder State ---
-            const COLLEGE_BRANCHES = [
-                { label: "CSE",  code: "CS",  color: "from-indigo-500 to-blue-500" },
-                { label: "ISE",  code: "IS",  color: "from-violet-500 to-purple-500" },
-                { label: "AIML", code: "AI",  color: "from-cyan-500 to-teal-500" },
-                { label: "ECE",  code: "EC",  color: "from-emerald-500 to-green-500" },
-                { label: "EEE",  code: "EE",  color: "from-orange-500 to-amber-500" },
-                { label: "MECH", code: "ME",  color: "from-rose-500 to-red-500" },
-                { label: "CIVIL",code: "CV",  color: "from-amber-500 to-yellow-500" },
-            ];
-            const COLLEGE_YEARS = [
-                { label: "1st Yr", year: "25" },
-                { label: "2nd Yr", year: "24" },
-                { label: "3rd Yr", year: "23" },
-                { label: "4th Yr", year: "22" },
-            ];
-            const [collegeCode, setCollegeCode] = useState("1SG");
-            const [builderYear, setBuilderYear] = useState("23");
-            const [builderBranch, setBuilderBranch] = useState("CS");
-            const [customBranch, setCustomBranch] = useState("");
-            const [builderFrom, setBuilderFrom] = useState("001");
-            const [builderTo, setBuilderTo] = useState("060");
-            const [includeLateral, setIncludeLateral] = useState(true);
-            const [builderLatFrom, setBuilderLatFrom] = useState("400");
-            const [builderLatTo, setBuilderLatTo] = useState("430");
             const [latStartUsn, setLatStartUsn] = useState("");
             const [latEndUsn, setLatEndUsn] = useState("");
             const [enableLatRange, setEnableLatRange] = useState(false);
-
-            const applyCollegeBuilder = () => {
-                const code = collegeCode.trim().toUpperCase() || "1SG";
-                const branch = (builderBranch === "CUSTOM" ? customBranch.trim().toUpperCase() : builderBranch) || "CS";
-                const regPrefix = `${code}${builderYear}${branch}`;
-                const pad = (n) => String(parseInt(n) || 1).padStart(3, "0");
-                const regStart = `${regPrefix}${pad(builderFrom)}`;
-                const regEnd = `${regPrefix}${pad(builderTo)}`;
-
-                setStartUsn(regStart);
-                setEndUsn(regEnd);
-
-                if (includeLateral) {
-                    const latYear = String(parseInt(builderYear) + 1).padStart(2, "0");
-                    const latPrefix = `${code}${latYear}${branch}`;
-                    const latStart = `${latPrefix}${pad(builderLatFrom)}`;
-                    const latEnd = `${latPrefix}${pad(builderLatTo)}`;
-                    setLatStartUsn(latStart);
-                    setLatEndUsn(latEnd);
-                    setEnableLatRange(true);
-                    setUsnList(`${regStart}-${pad(builderTo)}, ${latStart}-${pad(builderLatTo)}`);
-                } else {
-                    setLatStartUsn("");
-                    setLatEndUsn("");
-                    setEnableLatRange(false);
-                }
-                setInputMode("range");
-            };
             const [scrapingStatus, setScrapingStatus] = useState("idle"); // idle, scraping, completed, error
             const [logs, setLogs] = useState([]);
             const [progress, setProgress] = useState({ current: 0, total: 0, usn: "" });
             const [scrapedResults, setScrapedResults] = useState([]);
             const [captchaRequired, setCaptchaRequired] = useState(null); // { usn, captchaImg, attempt }
             const [captchaCode, setCaptchaCode] = useState("");
+            const [isRefreshingCaptcha, setIsRefreshingCaptcha] = useState(false);
             const [sessionID, setSessionID] = useState("");
             const [analysisResults, setAnalysisResults] = useState(null);
             
-            // UI tab navigation
+            // UI modal & navigation state
+            const [showGuideModal, setShowGuideModal] = useState(false);
+            const [showAboutModal, setShowAboutModal] = useState(false);
             const [activeTab, setActiveTab] = useState("directory"); // directory, subjects, toppers, backlogs
             const [searchTerm, setSearchTerm] = useState("");
             const [statusFilter, setStatusFilter] = useState("ALL");
@@ -507,8 +765,7 @@
                         start_usn: inputMode === "range" && !finalUsnList ? finalStart : "",
                         end_usn: inputMode === "range" && !finalUsnList ? finalEnd : "",
                         usn_list: inputMode === "list" ? finalUsnList : (finalUsnList || ""),
-                        portal_url: portalUrl,
-                        use_simulation: useSimulation
+                        portal_url: portalUrl
                     };
                     ws.send(JSON.stringify(configPayload));
                 };
@@ -532,9 +789,11 @@
                         setCaptchaRequired({
                             usn: msg.usn,
                             captchaImg: msg.captcha_img,
-                            attempt: msg.attempt
+                            attempt: msg.attempt,
+                            message: msg.message || ""
                         });
                         setCaptchaCode("");
+                        setIsRefreshingCaptcha(false);
                     }
                     else if (msg.type === "progress") {
                         // Reset captcha modal if open
@@ -576,6 +835,15 @@
                 };
             };
 
+            // Refresh Captcha image from server
+            const handleRefreshCaptcha = () => {
+                if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+                    setIsRefreshingCaptcha(true);
+                    setLogs(prev => [...prev, `[CAPTCHA] Requesting fresh CAPTCHA image for USN: ${captchaRequired?.usn}...`]);
+                    wsRef.current.send(JSON.stringify({ action: "refresh_captcha" }));
+                }
+            };
+
             // Submit Captcha response
             const handleCaptchaSubmit = (e) => {
                 if (e) e.preventDefault();
@@ -613,23 +881,65 @@
 
             return (
                 <div class="max-w-7xl mx-auto pb-16">
-                    <Header status={scrapingStatus} />
+                    <Header 
+                        status={scrapingStatus} 
+                        theme={theme} 
+                        onToggleTheme={toggleTheme} 
+                        onOpenGuide={() => setShowGuideModal(true)}
+                        onOpenAbout={() => setShowAboutModal(true)}
+                    />
+                    
+                    {/* How to Use Guide Modal */}
+                    <GuideModal isOpen={showGuideModal} onClose={() => setShowGuideModal(false)} />
+
+                    {/* About Project Modal */}
+                    <AboutModal isOpen={showAboutModal} onClose={() => setShowAboutModal(false)} />
                     
                     {/* Captcha Modal Overlay */}
                     {captchaRequired && (
                         <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
                             <div class="w-full max-w-md glass-panel-heavy p-6 rounded-3xl pulsing-border border text-center shadow-2xl">
                                 <span class="inline-block px-3 py-1 bg-brandPrimary/10 border border-brandPrimary/20 rounded-full text-brandPrimary text-xs font-bold uppercase tracking-wider mb-2">
-                                    Captcha Required
+                                    Captcha Verification
                                 </span>
                                 <h3 class="text-xl font-bold text-white mb-1">Verify Seat Number</h3>
-                                <p class="text-xs text-gray-400 mb-6">Solving captcha for student USN: <span class="text-brandCyan font-mono font-bold">{captchaRequired.usn}</span></p>
-                                
-                                <div class="flex flex-col items-center gap-4 p-4 bg-white/5 rounded-2xl border border-white/5 mb-6">
-                                    <div class="relative bg-white p-2.5 rounded-xl border border-white/10 shadow-inner">
-                                        <img src={captchaRequired.captchaImg} alt="CAPTCHA Code" class="h-12 w-auto object-contain rounded" />
+                                <p class="text-xs text-gray-400 mb-4">Solving captcha for student USN: <span class="text-brandCyan font-mono font-bold">{captchaRequired.usn}</span></p>
+
+                                {captchaRequired.message && captchaRequired.attempt > 1 && (
+                                    <div class="mb-4 p-3 bg-red-500/20 border border-red-500/40 rounded-xl flex items-center justify-center gap-2 text-xs text-red-300 font-bold animate-pulse">
+                                        <svg class="w-4 h-4 text-red-400 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                        </svg>
+                                        <span>{captchaRequired.message}</span>
                                     </div>
-                                    <p class="text-[10px] text-brandSecondary font-medium">Attempt #{captchaRequired.attempt} of 4</p>
+                                )}
+                                
+                                <div class="flex flex-col items-center gap-3 p-4 bg-white/5 rounded-2xl border border-white/5 mb-6">
+                                    <div class="relative flex items-center justify-center gap-3 bg-white p-2.5 rounded-xl border border-white/10 shadow-inner w-full">
+                                        <img src={captchaRequired.captchaImg} alt="CAPTCHA Code" class="h-12 w-auto object-contain rounded" />
+                                        <button 
+                                            type="button" 
+                                            onClick={handleRefreshCaptcha}
+                                            disabled={isRefreshingCaptcha}
+                                            title="Refresh CAPTCHA image"
+                                            class="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-700 transition flex items-center justify-center border border-gray-300 shadow-sm disabled:opacity-50"
+                                        >
+                                            <svg class={`w-5 h-5 text-gray-700 ${isRefreshingCaptcha ? 'animate-spin text-brandPrimary' : ''}`} fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                            </svg>
+                                        </button>
+                                    </div>
+                                    <div class="flex items-center justify-between w-full text-[10px] px-1">
+                                        <span class="text-brandSecondary font-medium">Attempt #{captchaRequired.attempt} of 4</span>
+                                        <button 
+                                            type="button" 
+                                            onClick={handleRefreshCaptcha} 
+                                            disabled={isRefreshingCaptcha}
+                                            class="text-brandCyan hover:text-white font-semibold flex items-center gap-1 transition disabled:opacity-50"
+                                        >
+                                            <span>{isRefreshingCaptcha ? "Refreshing..." : "🔄 Refresh Captcha"}</span>
+                                        </button>
+                                    </div>
                                 </div>
                                 
                                 <form onSubmit={handleCaptchaSubmit} class="flex flex-col gap-4">
@@ -688,226 +998,28 @@
                                     />
                                 </div>
                                 
-                                {/* Scraper Mode */}
-                                <div class="grid grid-cols-2 gap-4 mb-4">
-                                    <div>
-                                        <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Scraping Engine</label>
+                                {/* Scraper Options */}
+                                <div class="mb-4">
+                                    <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Input Mode Selection</label>
+                                    <div class="flex rounded-xl bg-black/40 border border-white/5 p-0.5">
                                         <button 
-                                            type="button"
-                                            onClick={() => setUseSimulation(!useSimulation)}
+                                            type="button" 
+                                            onClick={() => setInputMode("range")}
                                             disabled={scrapingStatus === "scraping"}
-                                            class={`w-full py-2.5 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-2 ${useSimulation ? 'bg-brandSecondary/10 border-brandSecondary/30 text-brandSecondary' : 'bg-brandCyan/10 border-brandCyan/30 text-brandCyan'}`}
+                                            class={`flex-1 py-2.5 text-center text-xs font-bold rounded-lg transition ${inputMode === "range" ? 'bg-brandPrimary text-white shadow' : 'text-gray-400 hover:text-white'}`}
                                         >
-                                            <span class={`w-2 h-2 rounded-full ${useSimulation ? 'bg-brandSecondary animate-pulse' : 'bg-brandCyan animate-pulse'}`}></span>
-                                            {useSimulation ? 'SIMULATION MODE' : 'LIVE CRAWLER'}
+                                            USN Range Mode
                                         </button>
-                                        {useSimulation && (
-                                            <p class="text-[10px] text-brandSecondary/70 mt-1.5 text-center font-medium">
-                                                ⚡ Captcha auto-resolved — no user input needed
-                                            </p>
-                                        )}
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Input Mode</label>
-                                        <div class="flex rounded-xl bg-black/40 border border-white/5 p-0.5">
-                                            <button 
-                                                type="button" 
-                                                onClick={() => setInputMode("range")}
-                                                disabled={scrapingStatus === "scraping"}
-                                                class={`flex-1 py-2 text-center text-xs font-bold rounded-lg transition ${inputMode === "range" ? 'bg-brandPrimary text-white shadow' : 'text-gray-400 hover:text-white'}`}
-                                            >
-                                                USN Range
-                                            </button>
-                                            <button 
-                                                type="button" 
-                                                onClick={() => setInputMode("list")}
-                                                disabled={scrapingStatus === "scraping"}
-                                                class={`flex-1 py-2 text-center text-xs font-bold rounded-lg transition ${inputMode === "list" ? 'bg-brandPrimary text-white shadow' : 'text-gray-400 hover:text-white'}`}
-                                            >
-                                                USN List
-                                            </button>
-                                        </div>
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setInputMode("list")}
+                                            disabled={scrapingStatus === "scraping"}
+                                            class={`flex-1 py-2.5 text-center text-xs font-bold rounded-lg transition ${inputMode === "list" ? 'bg-brandPrimary text-white shadow' : 'text-gray-400 hover:text-white'}`}
+                                        >
+                                            USN List Mode
+                                        </button>
                                     </div>
                                 </div>
-
-                                 <hr class="border-white/5 mb-4" />
-
-                                 {/* ===== UNIVERSAL COLLEGE QUICK BUILDER ===== */}
-                                 <div class="mb-4 rounded-xl border border-indigo-500/20 bg-gradient-to-br from-indigo-950/40 to-violet-950/40 overflow-hidden">
-                                     {/* Header */}
-                                     <div class="flex items-center gap-2 px-3.5 py-2.5 border-b border-indigo-500/15 bg-black/20">
-                                         <span class="text-base">🏫</span>
-                                         <span class="text-xs font-bold text-indigo-300 tracking-wider uppercase">VTU College Quick Builder</span>
-                                         <span class="ml-auto text-[10px] text-indigo-400/60 font-mono">Any VTU College</span>
-                                     </div>
-                                     <div class="p-3.5 space-y-3">
-                                         {/* College Code & Year */}
-                                         <div class="grid grid-cols-12 gap-2">
-                                             <div class="col-span-4">
-                                                 <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">College Code</p>
-                                                 <input 
-                                                     type="text" 
-                                                     maxLength="4"
-                                                     placeholder="e.g. 1SG, 4MW"
-                                                     value={collegeCode}
-                                                     onChange={e => setCollegeCode(e.target.value.toUpperCase())}
-                                                     disabled={scrapingStatus === "scraping"}
-                                                     class="w-full bg-black/40 border border-white/10 focus:border-indigo-400 focus:outline-none rounded-lg px-2.5 py-1 text-xs text-white font-mono uppercase text-center font-bold"
-                                                 />
-                                             </div>
-                                             <div class="col-span-8">
-                                                 <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Year of Study</p>
-                                                 <div class="grid grid-cols-4 gap-1">
-                                                     {COLLEGE_YEARS.map(y => (
-                                                         <button
-                                                             key={y.year}
-                                                             type="button"
-                                                             onClick={() => setBuilderYear(y.year)}
-                                                             disabled={scrapingStatus === "scraping"}
-                                                             class={`py-1 rounded-lg text-[10px] font-bold transition border ${
-                                                                 builderYear === y.year
-                                                                     ? 'bg-indigo-500/20 border-indigo-400/50 text-indigo-200'
-                                                                     : 'bg-black/20 border-white/5 text-gray-500 hover:text-gray-300'
-                                                             }`}
-                                                         >
-                                                             {y.label}
-                                                         </button>
-                                                     ))}
-                                                 </div>
-                                             </div>
-                                         </div>
-
-                                         {/* Branch selector */}
-                                         <div>
-                                             <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Branch</p>
-                                             <div class="flex flex-wrap gap-1">
-                                                 {COLLEGE_BRANCHES.map(b => (
-                                                     <button
-                                                         key={b.code}
-                                                         type="button"
-                                                         onClick={() => setBuilderBranch(b.code)}
-                                                         disabled={scrapingStatus === "scraping"}
-                                                         class={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition border ${
-                                                             builderBranch === b.code
-                                                                 ? `bg-gradient-to-r ${b.color} border-transparent text-white shadow-sm`
-                                                                 : 'bg-black/20 border-white/5 text-gray-500 hover:text-gray-300'
-                                                         }`}
-                                                     >
-                                                         {b.label}
-                                                     </button>
-                                                 ))}
-                                                 <button
-                                                     type="button"
-                                                     onClick={() => setBuilderBranch("CUSTOM")}
-                                                     disabled={scrapingStatus === "scraping"}
-                                                     class={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition border ${
-                                                         builderBranch === "CUSTOM"
-                                                             ? 'bg-brandCyan/20 border-brandCyan/50 text-brandCyan'
-                                                             : 'bg-black/20 border-white/5 text-gray-500 hover:text-gray-300'
-                                                     }`}
-                                                 >
-                                                     Custom
-                                                 </button>
-                                             </div>
-                                             {builderBranch === "CUSTOM" && (
-                                                 <input 
-                                                     type="text" 
-                                                     maxLength="3"
-                                                     placeholder="Enter branch code (e.g. AI, RA)"
-                                                     value={customBranch}
-                                                     onChange={e => setCustomBranch(e.target.value.toUpperCase())}
-                                                     class="mt-1.5 w-full bg-black/40 border border-white/10 rounded-lg px-3 py-1 text-xs text-white font-mono uppercase"
-                                                 />
-                                             )}
-                                         </div>
-
-                                         {/* From / To number range */}
-                                         <div class="grid grid-cols-2 gap-2">
-                                             <div>
-                                                 <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Regular From #</p>
-                                                 <input
-                                                     type="number" min="1" max="999"
-                                                     value={parseInt(builderFrom)}
-                                                     onChange={e => setBuilderFrom(String(e.target.value).padStart(3,"0"))}
-                                                     disabled={scrapingStatus === "scraping"}
-                                                     class="w-full bg-black/30 border border-white/5 focus:border-indigo-400 focus:outline-none rounded-lg px-3 py-1 text-xs text-white font-mono text-center"
-                                                 />
-                                             </div>
-                                             <div>
-                                                 <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Regular To #</p>
-                                                 <input
-                                                     type="number" min="1" max="999"
-                                                     value={parseInt(builderTo)}
-                                                     onChange={e => setBuilderTo(String(e.target.value).padStart(3,"0"))}
-                                                     disabled={scrapingStatus === "scraping"}
-                                                     class="w-full bg-black/30 border border-white/5 focus:border-indigo-400 focus:outline-none rounded-lg px-3 py-1 text-xs text-white font-mono text-center"
-                                                 />
-                                             </div>
-                                         </div>
-
-                                         {/* Lateral Entry Section */}
-                                         <div class="pt-2 border-t border-indigo-500/10">
-                                             <label class="flex items-center gap-2 cursor-pointer mb-1.5 select-none">
-                                                 <input 
-                                                     type="checkbox"
-                                                     checked={includeLateral}
-                                                     onChange={(e) => setIncludeLateral(e.target.checked)}
-                                                     disabled={scrapingStatus === "scraping"}
-                                                     class="w-3.5 h-3.5 rounded border-gray-600 bg-black/40 text-indigo-500 focus:ring-indigo-500"
-                                                 />
-                                                 <span class="text-xs font-bold text-indigo-200">Include Lateral Entry (400-Series)</span>
-                                             </label>
-                                             
-                                             {includeLateral && (
-                                                 <div class="grid grid-cols-2 gap-2 pl-5">
-                                                     <div>
-                                                         <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Lateral From #</p>
-                                                         <input
-                                                             type="number" min="400" max="499"
-                                                             value={parseInt(builderLatFrom)}
-                                                             onChange={e => setBuilderLatFrom(String(e.target.value).padStart(3,"0"))}
-                                                             disabled={scrapingStatus === "scraping"}
-                                                             class="w-full bg-black/30 border border-white/5 focus:border-indigo-400 focus:outline-none rounded-lg px-3 py-1 text-xs text-white font-mono text-center"
-                                                         />
-                                                     </div>
-                                                     <div>
-                                                         <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Lateral To #</p>
-                                                         <input
-                                                             type="number" min="400" max="499"
-                                                             value={parseInt(builderLatTo)}
-                                                             onChange={e => setBuilderLatTo(String(e.target.value).padStart(3,"0"))}
-                                                             disabled={scrapingStatus === "scraping"}
-                                                             class="w-full bg-black/30 border border-white/5 focus:border-indigo-400 focus:outline-none rounded-lg px-3 py-1 text-xs text-white font-mono text-center"
-                                                         />
-                                                     </div>
-                                                 </div>
-                                             )}
-                                         </div>
-
-                                         {/* Preview + Apply */}
-                                         <div class="flex items-center gap-2 pt-1">
-                                             <div class="flex-1 bg-black/40 rounded-lg px-3 py-2 border border-white/5 overflow-hidden">
-                                                 <p class="text-[9px] text-gray-400 uppercase tracking-wider mb-0.5 font-bold">Preview Target Queue</p>
-                                                 <div class="text-[11px] font-mono text-indigo-300 font-bold leading-tight">
-                                                     <div>{(collegeCode.trim().toUpperCase()||"1SG")}{builderYear}{(builderBranch==="CUSTOM"?customBranch.trim().toUpperCase()||"CS":builderBranch)}{String(parseInt(builderFrom)||1).padStart(3,'0')} → {String(parseInt(builderTo)||1).padStart(3,'0')} ({Math.max(0, (parseInt(builderTo)||1)-(parseInt(builderFrom)||1)+1)})</div>
-                                                     {includeLateral && (
-                                                         <div class="text-brandCyan text-[10px] mt-0.5">
-                                                             + {(collegeCode.trim().toUpperCase()||"1SG")}{String(parseInt(builderYear) + 1).padStart(2, "0")}{(builderBranch==="CUSTOM"?customBranch.trim().toUpperCase()||"CS":builderBranch)}{String(parseInt(builderLatFrom)||400).padStart(3,'0')} → {String(parseInt(builderLatTo)||400).padStart(3,'0')} ({Math.max(0, (parseInt(builderLatTo)||400)-(parseInt(builderLatFrom)||400)+1)})
-                                                         </div>
-                                                     )}
-                                                 </div>
-                                             </div>
-                                             <button
-                                                 type="button"
-                                                 onClick={applyCollegeBuilder}
-                                                 disabled={scrapingStatus === "scraping"}
-                                                 class="px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 rounded-lg text-xs font-bold text-white hover:from-indigo-500 hover:to-violet-500 transition shadow-md whitespace-nowrap"
-                                             >
-                                                 ✓ Apply
-                                             </button>
-                                         </div>
-                                     </div>
-                                 </div>
 
                                  <hr class="border-white/5 mb-4" />
                                  {/* USN range inputs */}
@@ -1067,7 +1179,7 @@
                             </h2>
 
                             {/* KPI metrics row */}
-                            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
                                 <div class="glass-panel p-6 rounded-2xl border-l-4 border-brandPrimary shadow-md">
                                     <p class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Students Searched</p>
                                     <h4 class="text-3xl font-extrabold text-white">{analysisResults.summary.total_students}</h4>
@@ -1097,14 +1209,14 @@
                                         <span>📚 SUBJECT-WISE PERFORMANCE ANALYSIS</span>
                                         <span class="text-[10px] text-gray-400">Pass rate columns & average score line</span>
                                     </h3>
-                                    <SubjectAnalyticsChart subjectData={analysisResults.subject_analysis} />
+                                    <SubjectAnalyticsChart subjectData={analysisResults.subject_analysis} appTheme={theme} />
                                 </div>
                                 <div class="glass-panel p-6 rounded-2xl flex flex-col justify-between">
                                     <h3 class="text-sm font-bold text-white uppercase tracking-wider mb-5 text-center">
                                         ⚖️ CLASS PASS/FAIL BALANCE
                                     </h3>
                                     <div class="flex-1 flex items-center justify-center">
-                                        <PassFailDonutChart summary={analysisResults.summary} />
+                                        <PassFailDonutChart summary={analysisResults.summary} appTheme={theme} />
                                     </div>
                                 </div>
                             </div>
@@ -1188,12 +1300,12 @@
                                     )}
                                 </div>
 
-                                <div class="p-6 overflow-x-auto">
+                                <div class="p-4 sm:p-6 overflow-x-auto scrollbar-thin">
                                     {/* Directory Tab Content */}
                                     {activeTab === "directory" && (
                                         <table class="w-full text-left text-xs border-collapse">
                                             <thead>
-                                                <tr class="border-b border-white/5 text-gray-400 uppercase tracking-widest font-bold">
+                                                <tr class="border-b border-white/5 text-gray-400 uppercase tracking-widest font-bold whitespace-nowrap">
                                                     <th class="py-3 px-4">USN</th>
                                                     <th class="py-3 px-4">Student Name</th>
                                                     <th class="py-3 px-4 text-right">Score</th>
@@ -1211,7 +1323,7 @@
                                                     else if (isDistinction) statusBadge = "bg-brandCyan/10 border-brandCyan/20 text-brandCyan text-glow";
 
                                                     return (
-                                                        <tr key={idx} class="border-b border-white/5 hover:bg-white/5 transition-all">
+                                                        <tr key={idx} class="border-b border-white/5 hover:bg-white/5 transition-all whitespace-nowrap">
                                                             <td class="py-3.5 px-4 font-mono font-bold text-gray-300">{student.usn}</td>
                                                             <td class="py-3.5 px-4 font-bold text-white uppercase">{student.name}</td>
                                                             <td class="py-3.5 px-4 text-right font-semibold text-gray-300">{student.total_marks} / {student.max_marks}</td>
@@ -1233,11 +1345,11 @@
                                         </table>
                                     )}
 
-                                    {/* Subjects Tab Content */}
+                                    {/* Subject Metrics Tab Content */}
                                     {activeTab === "subjects" && (
                                         <table class="w-full text-left text-xs border-collapse">
                                             <thead>
-                                                <tr class="border-b border-white/5 text-gray-400 uppercase tracking-widest font-bold">
+                                                <tr class="border-b border-white/5 text-gray-400 uppercase tracking-widest font-bold whitespace-nowrap">
                                                     <th class="py-3 px-4">Subject Code</th>
                                                     <th class="py-3 px-4">Subject Name</th>
                                                     <th class="py-3 px-4 text-right">Registered</th>
@@ -1251,7 +1363,7 @@
                                             </thead>
                                             <tbody>
                                                 {analysisResults.subject_analysis.map((sub, idx) => (
-                                                    <tr key={idx} class="border-b border-white/5 hover:bg-white/5 transition-all">
+                                                    <tr key={idx} class="border-b border-white/5 hover:bg-white/5 transition-all whitespace-nowrap">
                                                         <td class="py-3.5 px-4 font-mono font-bold text-brandPrimary">{sub.code}</td>
                                                         <td class="py-3.5 px-4 font-bold text-white uppercase">{sub.name}</td>
                                                         <td class="py-3.5 px-4 text-right font-semibold text-gray-300">{sub.registered}</td>
@@ -1271,7 +1383,7 @@
                                     {activeTab === "toppers" && (
                                         <table class="w-full text-left text-xs border-collapse">
                                             <thead>
-                                                <tr class="border-b border-white/5 text-gray-400 uppercase tracking-widest font-bold">
+                                                <tr class="border-b border-white/5 text-gray-400 uppercase tracking-widest font-bold whitespace-nowrap">
                                                     <th class="py-3 px-4 text-center">Rank</th>
                                                     <th class="py-3 px-4">USN</th>
                                                     <th class="py-3 px-4">Topper Student Name</th>
@@ -1289,7 +1401,7 @@
                                                     else if (topper.rank === 3) rankBadge = "bg-brandSecondary/10 border-brandSecondary/20 text-brandSecondary";
 
                                                     return (
-                                                        <tr key={idx} class="border-b border-white/5 hover:bg-white/5 transition-all">
+                                                        <tr key={idx} class="border-b border-white/5 hover:bg-white/5 transition-all whitespace-nowrap">
                                                             <td class="py-3.5 px-4 text-center">
                                                                 <span class={`inline-flex w-7 h-7 rounded-full items-center justify-center text-xs ${rankBadge}`}>
                                                                     {isRank1 ? "👑" : topper.rank}
@@ -1317,7 +1429,7 @@
                                     {activeTab === "backlogs" && (
                                         <table class="w-full text-left text-xs border-collapse">
                                             <thead>
-                                                <tr class="border-b border-white/5 text-gray-400 uppercase tracking-widest font-bold">
+                                                <tr class="border-b border-white/5 text-gray-400 uppercase tracking-widest font-bold whitespace-nowrap">
                                                     <th class="py-3 px-4">USN</th>
                                                     <th class="py-3 px-4">Student Name</th>
                                                     <th class="py-3 px-4 text-right">Aggregated Score</th>
@@ -1327,7 +1439,7 @@
                                             </thead>
                                             <tbody>
                                                 {analysisResults.failed_students.map((student, idx) => (
-                                                    <tr key={idx} class="border-b border-white/5 hover:bg-white/5 transition-all">
+                                                    <tr key={idx} class="border-b border-white/5 hover:bg-white/5 transition-all whitespace-nowrap">
                                                         <td class="py-3.5 px-4 font-mono font-bold text-gray-300">{student.usn}</td>
                                                         <td class="py-3.5 px-4 font-bold text-white uppercase">{student.name}</td>
                                                         <td class="py-3.5 px-4 text-right font-semibold text-gray-400">{student.total_marks}</td>
@@ -1355,6 +1467,12 @@
                             </div>
                         </div>
                     )}
+
+                    {/* Footer Component */}
+                    <Footer 
+                        onOpenGuide={() => setShowGuideModal(true)} 
+                        onOpenAbout={() => setShowAboutModal(true)} 
+                    />
                 </div>
             );
         };

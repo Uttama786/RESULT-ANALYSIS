@@ -28,7 +28,7 @@ except ImportError:
     logger.warning("Selenium or webdriver_manager not installed. Real scraping will not be functional.")
 
 class VTUScraper:
-    def __init__(self, session_id: str, custom_url: str = None, use_simulation: bool = True):
+    def __init__(self, session_id: str, custom_url: str = None, use_simulation: bool = False):
         self.session_id = session_id
         self.portal_url = custom_url or "https://results.vtu.ac.in/"
         self.use_simulation = use_simulation
@@ -355,24 +355,11 @@ class VTUScraper:
                 {"code": f"{scheme}{branch}L{sem}7", "name": f"{branch} Laboratory II"},
                 {"code": f"{scheme}{branch}P{sem}8", "name": f"Mini Project - {branch}"}
             ]
-
         # Return specific semester subjects, default to 6th if semester not found
         return subjects_templates[branch].get(sem, subjects_templates[branch][6])
 
-    def get_captcha(self, usn: str) -> tuple:
-        """Navigates to the portal (real or simulation) and retrieves the captcha image as Base64.
-        In simulation mode, returns a tuple (base64_img, auto_solution) so the backend can
-        auto-submit without asking the user to solve the captcha.
-        """
-        if self.use_simulation:
-            # Simulate network lag
-            time.sleep(0.6)
-            self.captcha_solution, base64_img = self.generate_mock_captcha()
-            logger.info(f"Simulated Captcha auto-solved for USN {usn}: {self.captcha_solution}")
-            # Return both the image and the pre-solved answer so the backend can bypass user input
-            return base64_img, self.captcha_solution
-            
-        # Real scraping captcha retrieval
+    def get_captcha(self, usn: str) -> str:
+        """Navigates to the portal and retrieves the captcha image as Base64 string."""
         try:
             logger.info(f"Real Scraper: Opening results page: {self.portal_url}")
             self.driver.get(self.portal_url)
@@ -395,93 +382,6 @@ class VTUScraper:
 
     def submit_and_scrape(self, usn: str, captcha_input: str) -> dict:
         """Submits the USN and captcha, and scrapes the result."""
-        if self.use_simulation:
-            time.sleep(0.8)
-            # In simulation mode, captcha is always auto-accepted (no user input needed)
-            logger.info(f"Simulation Mode: Auto-accepting captcha for USN {usn} (bypass validation)")
-                
-            # Check if student is a "Not Found" case (simulate 5% chance of invalid USN)
-            if random.random() < 0.05:
-                logger.info(f"Simulated Result: USN {usn} not found.")
-                return {"status": "not_found", "message": "Result not active or USN not found."}
-                
-            # Generate simulated result data
-            student_name = random.choice(self.mock_names)
-            # Remove from list to avoid repetition if possible
-            if len(self.mock_names) > 5:
-                self.mock_names.remove(student_name)
-                
-            mock_sub_list = self.generate_mock_subjects(usn)
-            subjects = []
-            total_marks = 0
-            max_marks = 0
-            failed_any = False
-            
-            # Generate grades for each subject
-            for sub in mock_sub_list:
-                # Lab vs Theory marks
-                is_lab = "L" in sub["code"] or "P" in sub["code"]
-                sub_max = 100
-                
-                # Distribution of internal/external marks
-                if is_lab:
-                    internal = random.randint(35, 50)  # Max 50
-                    external = random.randint(30, 50)  # Max 50
-                    total = internal + external
-                else:
-                    internal = random.randint(25, 40)  # Max 40
-                    external = random.randint(20, 60)  # Max 60
-                    total = internal + external
-                
-                # Check for fail
-                # VTU passing standards: Min 35% in external, and 40% overall
-                pass_external = external >= (21 if not is_lab else 18)  # 35%
-                pass_total = total >= 40
-                
-                result_status = "P"
-                if not (pass_external and pass_total):
-                    result_status = "F"
-                    failed_any = True
-                    
-                subjects.append({
-                    "code": sub["code"],
-                    "name": sub["name"],
-                    "internal": internal,
-                    "external": external,
-                    "total": total,
-                    "result": result_status
-                })
-                total_marks += total
-                max_marks += sub_max
-                
-            percentage = round((total_marks / max_marks) * 100, 2)
-            
-            # Determine class / pass fail status
-            if failed_any:
-                status = "FAIL"
-            elif percentage >= 70:
-                status = "FIRST CLASS WITH DISTINCTION"
-            elif percentage >= 60:
-                status = "FIRST CLASS"
-            elif percentage >= 50:
-                status = "SECOND CLASS"
-            else:
-                status = "PASS CLASS"
-                
-            logger.info(f"Simulated Result scraped for {usn}: {student_name} - {status} ({percentage}%)")
-            
-            return {
-                "status": "success",
-                "data": {
-                    "usn": usn,
-                    "name": student_name.upper(),
-                    "total_marks": total_marks,
-                    "max_marks": max_marks,
-                    "percentage": percentage,
-                    "status": status,
-                    "subjects": subjects
-                }
-            }
 
         # Real scraping submission
         main_window = None
@@ -512,32 +412,28 @@ class VTUScraper:
             logger.info(f"Real Scraper: Submitting form for USN {usn} with captcha '{captcha_input}'")
             submit_btn_el.click()
             
-            # Wait for result page to fully load — try WebDriverWait first, fallback to fixed sleep
-            try:
-                WebDriverWait(self.driver, 10).until(
-                    lambda d: len(d.find_elements(By.TAG_NAME, "table")) > 0
-                )
-                time.sleep(0.8)  # Extra wait for full JS render
-            except Exception:
-                time.sleep(3)  # Fixed wait fallback
-            
-            logger.info(f"Real Scraper: Page loaded after submit. URL: {self.driver.current_url}")
-            
-            # 1. Check for Javascript Alert (Usually "Invalid Captcha" or "USN not found")
+            # 1. Check for Javascript Alert immediately after submit (Usually "Invalid Captcha" or "USN not found")
             alert_text = None
             try:
+                WebDriverWait(self.driver, 3).until(EC.alert_is_present())
                 alert = self.driver.switch_to.alert
                 alert_text = alert.text
                 alert.accept()
-                logger.warning(f"Browser alert triggered: '{alert_text}'")
+                logger.warning(f"Browser alert triggered immediately after submit: '{alert_text}'")
             except Exception:
                 pass
                 
             if alert_text:
-                if "captcha" in alert_text.lower():
+                alert_lower = alert_text.lower()
+                if any(k in alert_lower for k in ["captcha", "code", "enter captcha"]):
+                    logger.warning(f"Invalid CAPTCHA alert for {usn}: '{alert_text}'")
                     return {"status": "invalid_captcha", "error": "Invalid CAPTCHA code entered. Please try again."}
                 else:
-                    return {"status": "not_found", "message": f"Result not found for USN: {alert_text}"}
+                    logger.info(f"Browser alert triggered for {usn}: '{alert_text}'. Skipping USN.")
+                    return {"status": "not_found", "message": f"University Seat Number is not available or Invalid ({alert_text})."}
+
+            # Wait for result page / new tab to load
+            time.sleep(1.5)
             
             # 2. Check for multiple windows (new tab/window opened by target="_blank")
             all_windows = self.driver.window_handles
@@ -552,10 +448,43 @@ class VTUScraper:
                 logger.info("Switched to the newly opened result tab.")
                 time.sleep(1.0)
                 
-            # 3. Check page source for common errors
+            # 3. Check page URL and page source for common errors
+            current_url = self.driver.current_url.lower()
             page_src = self.driver.page_source
+            page_src_lower = page_src.lower()
+
+            # Check if USN not found phrases exist
+            is_usn_not_found = any(phrase in page_src_lower for phrase in [
+                "university seat number is not available",
+                "seat number is not available",
+                "results are not yet announced",
+                "invalid usn",
+                "usn is invalid",
+                "not available or invalid"
+            ])
+
+            if is_usn_not_found:
+                if switched:
+                    try:
+                        self.driver.close()
+                    except Exception:
+                        pass
+                    try:
+                        self.driver.switch_to.window(main_window)
+                    except Exception:
+                        pass
+                logger.info(f"Page content indicates USN {usn} is not available. Skipping USN.")
+                return {"status": "not_found", "message": "University Seat Number is not available or Invalid."}
+
+            # Check if invalid captcha is in page source or if still on index.php with captcha form
+            is_invalid_captcha_page = (
+                "invalid captcha" in page_src_lower or
+                "captcha code required" in page_src_lower or
+                "captcha code !!!" in page_src_lower or
+                ("index.php" in current_url and ("captchacode" in page_src_lower or "captcha" in page_src_lower))
+            )
             
-            if "Invalid Captcha" in page_src or "Captcha Code Required" in page_src or "invalid captcha" in page_src.lower():
+            if is_invalid_captcha_page:
                 if switched:
                     try:
                         self.driver.close()
@@ -565,19 +494,8 @@ class VTUScraper:
                         self.driver.switch_to.window(main_window)
                     except Exception:
                         pass
+                logger.warning(f"Page content or URL indicates invalid captcha for USN {usn}.")
                 return {"status": "invalid_captcha", "error": "Invalid CAPTCHA code entered. Please try again."}
-                
-            if "University Seat Number is not available" in page_src or "Results are not yet announced" in page_src or "seat number is not available" in page_src.lower():
-                if switched:
-                    try:
-                        self.driver.close()
-                    except Exception:
-                        pass
-                    try:
-                        self.driver.switch_to.window(main_window)
-                    except Exception:
-                        pass
-                return {"status": "not_found", "message": "USN not active or result not yet announced."}
                 
             # 4. Successful landing - parse results page source
             parsed_data = self._parse_results_page(page_src, usn)
@@ -594,7 +512,9 @@ class VTUScraper:
                     pass
                     
             if not parsed_data:
-                # If page is empty or tables not found, treat as not found
+                # If page is empty or tables not found, check if we stayed on captcha form page
+                if "index.php" in current_url or "captcha" in page_src_lower:
+                    return {"status": "invalid_captcha", "error": "Invalid CAPTCHA code entered. Please try again."}
                 return {"status": "not_found", "message": "Failed to extract result table from page content."}
                 
             return {"status": "success", "data": parsed_data}

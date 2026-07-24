@@ -161,7 +161,6 @@ async def websocket_scrape(websocket: WebSocket, session_id: str):
         end_usn = config.get("end_usn", "").strip()
         usn_list_str = config.get("usn_list", "").strip()
         portal_url = config.get("portal_url", "").strip()
-        use_simulation = config.get("use_simulation", True)
         
         # Build USN scraping list
         target_usns = []
@@ -185,22 +184,17 @@ async def websocket_scrape(websocket: WebSocket, session_id: str):
         })
         
         # Step 2: Initialize crawler
-        scraper = VTUScraper(session_id=session_id, custom_url=portal_url, use_simulation=use_simulation)
+        scraper = VTUScraper(session_id=session_id, custom_url=portal_url, use_simulation=False)
         
-        # Try initializing chrome driver, fallback to simulation if failed
-        if not use_simulation:
-            await safe_send({"type": "log", "message": "Launching automated Selenium Chrome driver in background..."})
-            success = scraper.initialize_browser()
-            if not success:
-                await safe_send({
-                    "type": "log",
-                    "message": "⚠️ Google Chrome or WebDriver was not detected. Falling back to high-fidelity Simulation Mode automatically."
-                })
-                # Re-create scraper in simulation mode
-                scraper = VTUScraper(session_id=session_id, custom_url=portal_url, use_simulation=True)
-                use_simulation = True  # Update local flag so the captcha logic uses auto-mode
-        else:
-            await safe_send({"type": "log", "message": "🚀 Launching scraping simulation pipeline..."})
+        await safe_send({"type": "log", "message": "Launching automated Selenium Chrome driver in background..."})
+        success = scraper.initialize_browser()
+        if not success:
+            await safe_send({
+                "type": "error",
+                "message": "❌ Could not initialize Google Chrome WebDriver. Please ensure Chrome is installed on the system."
+            })
+            await websocket.close()
+            return
             
         scraped_results = []
         
@@ -223,35 +217,36 @@ async def websocket_scrape(websocket: WebSocket, session_id: str):
                 attempts += 1
                 try:
                     # Get captcha screenshot
-                    captcha_result = scraper.get_captcha(usn)
+                    captcha_img_base64 = scraper.get_captcha(usn)
                     
-                    if use_simulation:
-                        # In simulation mode: auto-solve captcha, no user input needed
-                        captcha_img_base64, auto_captcha_code = captcha_result
+                    # Send captcha image to frontend and wait for user input
+                    await safe_send({
+                        "type": "captcha_required",
+                        "usn": usn,
+                        "captcha_img": captcha_img_base64,
+                        "attempt": attempts,
+                        "message": "Invalid CAPTCHA code! Please enter a valid captcha code." if attempts > 1 else "Enter CAPTCHA code to fetch result."
+                    })
+                    
+                    # Wait for client solution input — detect disconnect
+                    logger.info(f"Waiting for CAPTCHA solution for {usn} (Attempt {attempts}/{max_attempts})")
+                    try:
+                        client_response = await websocket.receive_json()
+                    except WebSocketDisconnect:
+                        logger.info(f"Client disconnected while waiting for captcha for {usn}")
+                        return  # Exit handler cleanly
+                    
+                    # Handle CAPTCHA refresh request from frontend without penalizing attempts counter
+                    if client_response.get("action") == "refresh_captcha" or client_response.get("refresh"):
+                        logger.info(f"User requested fresh CAPTCHA image for {usn}")
                         await safe_send({
                             "type": "log",
-                            "message": f"[SIM] Auto-resolving captcha for {usn} — no manual input required."
+                            "message": f"🔄 Refreshing CAPTCHA image for {usn}..."
                         })
-                        captcha_code = auto_captcha_code
-                    else:
-                        # Real mode: send captcha image to frontend and wait for user input
-                        captcha_img_base64 = captcha_result
-                        await safe_send({
-                            "type": "captcha_required",
-                            "usn": usn,
-                            "captcha_img": captcha_img_base64,
-                            "attempt": attempts,
-                            "message": "Invalid CAPTCHA code. Please try again." if attempts > 1 else "Enter CAPTCHA code to fetch result."
-                        })
-                        
-                        # Wait for client solution input — detect disconnect
-                        logger.info(f"Waiting for CAPTCHA solution for {usn} (Attempt {attempts}/{max_attempts})")
-                        try:
-                            client_response = await websocket.receive_json()
-                        except WebSocketDisconnect:
-                            logger.info(f"Client disconnected while waiting for captcha for {usn}")
-                            return  # Exit handler cleanly
-                        captcha_code = client_response.get("captcha_code", "").strip()
+                        attempts -= 1  # Revert attempt count increment
+                        continue  # Fetch a new captcha image and send to client
+
+                    captcha_code = client_response.get("captcha_code", "").strip()
                     
                     # Submit and scrape
                     result = scraper.submit_and_scrape(usn, captcha_code)
@@ -259,16 +254,17 @@ async def websocket_scrape(websocket: WebSocket, session_id: str):
                     if result["status"] == "invalid_captcha":
                         await safe_send({
                             "type": "log",
-                            "message": f"❌ CAPTCHA verification failed for {usn}. Retrying with a new code..."
+                            "message": f"❌ Invalid CAPTCHA code for USN {usn}. Remaining on USN {usn} — please enter a valid CAPTCHA."
                         })
                         continue  # Re-loops to fetch new captcha for same USN
                         
                     elif result["status"] == "not_found":
+                        reason = result.get("message", "University Seat Number is not available or Invalid.")
                         await safe_send({
                             "type": "progress",
                             "usn": usn,
                             "status": "NOT_FOUND",
-                            "message": f"🔍 {usn}: Result not found or USN not registered."
+                            "message": f"⏩ Skipping {usn}: {reason}"
                         })
                         resolved = True
                         
