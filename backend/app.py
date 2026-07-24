@@ -403,6 +403,7 @@ async def websocket_scrape(websocket: WebSocket, session_id: str):
         logger.info(f"WebSocket scrape session finished: {session_id}")
 
 FEEDBACKS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "feedbacks.json")
+TARGET_FEEDBACK_EMAIL = "uttamabhise@gmail.com"
 
 class FeedbackRequest(BaseModel):
     name: str = ""
@@ -411,9 +412,59 @@ class FeedbackRequest(BaseModel):
     rating: int = 5
     message: str
 
+def send_feedback_email_async(entry: dict):
+    """
+    Sends email notification of user feedback directly to uttamabhise@gmail.com.
+    Dispatches via SMTP if environment variables (SMTP_USER, SMTP_PASSWORD) are set.
+    """
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+    
+    smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_user = os.getenv("SMTP_USER", "")
+    smtp_password = os.getenv("SMTP_PASSWORD", "")
+    
+    subject = f"[VTU Result Platform Feedback] {entry['category']} - {'⭐' * entry['rating']}"
+    
+    body = f"""New User Feedback Received for VTU Result Analysis Platform:
+======================================================================
+Timestamp: {entry['timestamp']}
+Category:  {entry['category']}
+Rating:    {'⭐' * entry['rating']} ({entry['rating']}/5)
+From Name: {entry['name']}
+From Email:{entry['email'] or 'Not provided'}
+
+Feedback Comment:
+----------------------------------------------------------------------
+{entry['message']}
+======================================================================
+Feedback Entry ID: {entry['id']}
+Destination Address: {TARGET_FEEDBACK_EMAIL}
+"""
+    logger.info(f"📧 [FEEDBACK ROUTER] Directing feedback entry to: {TARGET_FEEDBACK_EMAIL}")
+    
+    if smtp_user and smtp_password:
+        try:
+            msg = MIMEMultipart()
+            msg['From'] = smtp_user
+            msg['To'] = TARGET_FEEDBACK_EMAIL
+            msg['Subject'] = subject
+            msg.attach(MIMEText(body, 'plain', 'utf-8'))
+            
+            with smtplib.SMTP(smtp_server, smtp_port) as server:
+                server.starttls()
+                server.login(smtp_user, smtp_password)
+                server.send_message(msg)
+            logger.info(f"✅ Feedback email successfully dispatched to {TARGET_FEEDBACK_EMAIL}")
+        except Exception as e:
+            logger.error(f"❌ Failed to dispatch SMTP feedback email to {TARGET_FEEDBACK_EMAIL}: {e}")
+
 @app.post("/api/feedback")
 def submit_feedback(feedback: FeedbackRequest):
     import json
+    import threading
     from datetime import datetime
     
     if not feedback.message.strip():
@@ -426,7 +477,8 @@ def submit_feedback(feedback: FeedbackRequest):
         "email": feedback.email.strip(),
         "category": feedback.category,
         "rating": feedback.rating,
-        "message": feedback.message.strip()
+        "message": feedback.message.strip(),
+        "target_email": TARGET_FEEDBACK_EMAIL
     }
     
     feedbacks = []
@@ -446,7 +498,10 @@ def submit_feedback(feedback: FeedbackRequest):
         logger.error(f"Failed to write feedback: {e}")
         raise HTTPException(status_code=500, detail="Could not save feedback.")
         
-    return {"status": "success", "message": "Thank you for your feedback!"}
+    # Dispatch email notification in background thread
+    threading.Thread(target=send_feedback_email_async, args=(entry,), daemon=True).start()
+    
+    return {"status": "success", "message": f"Thank you for your feedback! Your message is sent to {TARGET_FEEDBACK_EMAIL}."}
 
 @app.get("/api/feedbacks")
 def get_feedbacks():
