@@ -172,7 +172,18 @@ async def websocket_scrape(websocket: WebSocket, session_id: str):
         config = await websocket.receive_json()
         logger.info(f"Received scraping configurations: {config}")
         
-        start_usn = config.get("start_usn", "").strip()
+        # Check API Key if SERVER_API_KEY environment variable is configured
+        server_api_key = os.getenv("SERVER_API_KEY", "").strip()
+        client_api_key = config.get("api_key", "").strip()
+        if server_api_key and client_api_key != server_api_key:
+            await safe_send({
+                "type": "error",
+                "message": "🔒 Access Denied: Invalid or missing Server API Key authorization."
+            })
+            await websocket.close()
+            return
+
+        start_usn = config.get("start_usn", "").strip().upper()
         end_usn = config.get("end_usn", "").strip()
         usn_list_str = config.get("usn_list", "").strip()
         portal_url = config.get("portal_url", "").strip()

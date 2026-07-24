@@ -943,7 +943,11 @@
             const [captchaRequired, setCaptchaRequired] = useState(null); // { usn, captchaImg, attempt }
             const [captchaCode, setCaptchaCode] = useState("");
             const [isRefreshingCaptcha, setIsRefreshingCaptcha] = useState(false);
-            const [sessionID, setSessionID] = useState("");
+            const [apiKey, setApiKey] = useState(() => localStorage.getItem("vtu_api_key") || "");
+            
+            useEffect(() => {
+                localStorage.setItem("vtu_api_key", apiKey);
+            }, [apiKey]);
             const [analysisResults, setAnalysisResults] = useState(null);
             const [processedUsns, setProcessedUsns] = useState(new Set());
             
@@ -1032,6 +1036,7 @@
 
                     // Send configs with resume parameters
                     const configPayload = {
+                        api_key: apiKey,
                         start_usn: inputMode === "range" && !finalUsnList ? finalStart : "",
                         end_usn: inputMode === "range" && !finalUsnList ? finalEnd : "",
                         usn_list: inputMode === "list" ? finalUsnList : (finalUsnList || ""),
@@ -1285,6 +1290,22 @@
                                         type="url" 
                                         value={portalUrl}
                                         onChange={(e) => setPortalUrl(e.target.value)}
+                                        disabled={scrapingStatus === "scraping"}
+                                        class="w-full bg-black/30 border border-white/5 focus:border-brandPrimary focus:outline-none rounded-xl px-4 py-2.5 text-sm text-gray-300 font-mono"
+                                    />
+                                </div>
+
+                                {/* API Key Security / Solvers */}
+                                <div class="mb-4">
+                                    <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                                        <span>🔑 API Key <span class="text-gray-500 font-normal lowercase">(optional authorization key)</span></span>
+                                        <span class="text-[10px] text-brandCyan font-mono font-semibold">Security / Solver</span>
+                                    </label>
+                                    <input 
+                                        type="password" 
+                                        placeholder="Enter API Key if required by server..."
+                                        value={apiKey}
+                                        onChange={(e) => setApiKey(e.target.value)}
                                         disabled={scrapingStatus === "scraping"}
                                         class="w-full bg-black/30 border border-white/5 focus:border-brandPrimary focus:outline-none rounded-xl px-4 py-2.5 text-sm text-gray-300 font-mono"
                                     />
