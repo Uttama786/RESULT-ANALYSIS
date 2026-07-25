@@ -1,9 +1,13 @@
 import os
 import re
 import uuid
+import json
+import secrets
+import hashlib
 import logging
-from typing import Dict, List, Any
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from datetime import datetime
+from typing import Dict, List, Any, Optional
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Header, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
@@ -15,8 +19,11 @@ from analyzer import ResultAnalyzer
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-# Create the exports directory if it doesn't exist
-EXPORTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "exports")
+# Persistent data directory support (e.g. Render Persistent Disk or local folder)
+DATA_DIR = os.getenv("DATA_DIR", os.path.dirname(os.path.abspath(__file__)))
+os.makedirs(DATA_DIR, exist_ok=True)
+
+EXPORTS_DIR = os.path.join(DATA_DIR, "exports")
 TEMPLATES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
 os.makedirs(EXPORTS_DIR, exist_ok=True)
 os.makedirs(TEMPLATES_DIR, exist_ok=True)
@@ -36,8 +43,134 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Global dictionary to track session files
+# Global dictionary to track session files & active user tokens
 session_registry: Dict[str, Dict[str, Any]] = {}
+active_tokens: Dict[str, Dict[str, Any]] = {}
+
+USERS_FILE = os.path.join(DATA_DIR, "users.json")
+HISTORY_FILE = os.path.join(DATA_DIR, "history.json")
+
+def hash_password(password: str, salt: Optional[str] = None) -> tuple:
+    if not salt:
+        salt = secrets.token_hex(16)
+    key = hashlib.pbkdf2_hmac(
+        'sha256',
+        password.encode('utf-8'),
+        salt.encode('utf-8'),
+        100000
+    )
+    return key.hex(), salt
+
+def verify_password(password: str, salt: str, hashed: str) -> bool:
+    key_hex, _ = hash_password(password, salt)
+    return secrets.compare_digest(key_hex, hashed)
+
+def load_users() -> List[Dict[str, Any]]:
+    if os.path.exists(USERS_FILE):
+        try:
+            with open(USERS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            logger.error(f"Error reading users.json: {e}")
+            return []
+    return []
+
+def save_users(users: List[Dict[str, Any]]):
+    try:
+        with open(USERS_FILE, "w", encoding="utf-8") as f:
+            json.dump(users, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        logger.error(f"Error writing users.json: {e}")
+
+def ensure_default_admin():
+    users = load_users()
+    if not users:
+        admin_hash, admin_salt = hash_password("#Uttama207")
+        default_admin = {
+            "id": "usr_admin_uttam",
+            "username": "UttamBhise",
+            "hashed_password": admin_hash,
+            "salt": admin_salt,
+            "full_name": "Uttam Bhise",
+            "email": "uttamabhise@gmail.com",
+            "role": "admin",
+            "department": "Computer Science & Engineering",
+            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        users.append(default_admin)
+        save_users(users)
+        logger.info("🔑 Auto-seeded default Administrator account 'UttamBhise'.")
+
+ensure_default_admin()
+
+def get_user_by_username(username: str) -> Optional[Dict[str, Any]]:
+    users = load_users()
+    clean_username = username.strip().lower()
+    for user in users:
+        if user.get("username", "").strip().lower() == clean_username:
+            return user
+    return None
+
+
+def load_history() -> List[Dict[str, Any]]:
+    if os.path.exists(HISTORY_FILE):
+        try:
+            with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            logger.error(f"Error loading history.json: {e}")
+            return []
+    return []
+
+def save_history(history: List[Dict[str, Any]]):
+    try:
+        with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+            json.dump(history, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        logger.error(f"Error saving history.json: {e}")
+
+def add_history_entry(user_id: str, username: str, session_id: str, excel_path: str, usn_count: int, usn_range_summary: str) -> Dict[str, Any]:
+    history = load_history()
+    file_name = os.path.basename(excel_path)
+    file_size = os.path.getsize(excel_path) if os.path.exists(excel_path) else 0
+    file_size_kb = round(file_size / 1024, 1)
+
+    entry = {
+        "id": f"hist_{uuid.uuid4().hex[:8]}",
+        "user_id": user_id,
+        "username": username,
+        "session_id": session_id,
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "usn_count": usn_count,
+        "usn_range_summary": usn_range_summary,
+        "excel_file": file_name,
+        "excel_path": excel_path,
+        "file_size_kb": file_size_kb
+    }
+    history.insert(0, entry)
+    save_history(history)
+    logger.info(f"📁 Archived Excel analysis history entry for '{username}': {file_name}")
+    return entry
+
+class UserRegisterRequest(BaseModel):
+    username: str
+    password: str
+    full_name: str = ""
+    email: str = ""
+    role: str = "student"
+    department: str = ""
+
+class UserUpdateRequest(BaseModel):
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+    role: Optional[str] = None
+    department: Optional[str] = None
+    new_password: Optional[str] = None
+
+class UserLoginRequest(BaseModel):
+    username: str
+    password: str
+
 
 def cleanup_old_sessions(max_sessions: int = 25):
     """Clean up oldest session files and memory entries to prevent disk/memory bloat."""
@@ -127,6 +260,322 @@ def read_root():
         with open(html_path, "r", encoding="utf-8") as f:
             return HTMLResponse(content=f.read())
     return HTMLResponse(content="<h3>VTU Result Analyzer templates/index.html is missing.</h3>", status_code=404)
+
+# ============================================
+# AUTHENTICATION & ADMIN USER MANAGEMENT APIS
+# ============================================
+
+def get_admin_user(token: str = Query(default=""), authorization: Optional[str] = Header(None)) -> Dict[str, Any]:
+    """Helper to enforce Admin-only access on administrative endpoints (restricted to UttamBhise)."""
+    req_token = token.strip()
+    if not req_token and authorization and authorization.startswith("Bearer "):
+        req_token = authorization.replace("Bearer ", "").strip()
+    
+    if not req_token or req_token not in active_tokens:
+        raise HTTPException(status_code=401, detail="Authentication required. Please log in.")
+    
+    user_info = active_tokens[req_token]
+    clean_username = user_info.get("username", "").strip().lower()
+    if user_info.get("role") != "admin" or clean_username != "uttambhise":
+        raise HTTPException(status_code=403, detail="🔒 Access Denied: CRUD operations are strictly restricted to primary administrator UttamBhise.")
+        
+    return user_info
+
+@app.post("/api/auth/register")
+def register_user(req: UserRegisterRequest, token: str = Query(default=""), authorization: Optional[str] = Header(None)):
+    """Restricted Registration Endpoint: Only accessible by System Administrators."""
+    get_admin_user(token, authorization)
+    return admin_create_user(req, token, authorization)
+
+@app.get("/api/admin/users")
+def get_all_users(token: str = Query(default=""), authorization: Optional[str] = Header(None)):
+    """Admin endpoint to fetch list of all registered user accounts."""
+    get_admin_user(token, authorization)
+    users = load_users()
+    sanitized = []
+    for u in users:
+        sanitized.append({
+            "id": u.get("id"),
+            "username": u.get("username"),
+            "full_name": u.get("full_name"),
+            "email": u.get("email"),
+            "role": u.get("role"),
+            "department": u.get("department", ""),
+            "created_at": u.get("created_at")
+        })
+    return sanitized
+
+@app.post("/api/admin/users")
+def admin_create_user(req: UserRegisterRequest, token: str = Query(default=""), authorization: Optional[str] = Header(None)):
+    """Admin endpoint to provision a new user account."""
+    admin_info = get_admin_user(token, authorization)
+    
+    username = req.username.strip()
+    if not username or len(username) < 3:
+        raise HTTPException(status_code=400, detail="Username must be at least 3 characters.")
+    if not req.password or len(req.password) < 4:
+        raise HTTPException(status_code=400, detail="Password must be at least 4 characters.")
+    
+    users = load_users()
+    if any(u.get("username", "").strip().lower() == username.lower() for u in users):
+        raise HTTPException(status_code=400, detail=f"Username '{username}' already exists.")
+    
+    hashed_pwd, salt = hash_password(req.password)
+    user_id = f"usr_{uuid.uuid4().hex[:8]}"
+    role = req.role.strip() if req.role and req.role.strip() else "student"
+    department = req.department.strip() if req.department else ""
+    full_name = req.full_name.strip() or username
+    
+    new_user = {
+        "id": user_id,
+        "username": username,
+        "hashed_password": hashed_pwd,
+        "salt": salt,
+        "full_name": full_name,
+        "email": req.email.strip(),
+        "role": role,
+        "department": department,
+        "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    }
+    users.append(new_user)
+    save_users(users)
+    
+    logger.info(f"👑 Admin '{admin_info['username']}' created user account: '{username}' ({role})")
+    
+    return {
+        "status": "success",
+        "message": f"User '{username}' created successfully!",
+        "user": {
+            "id": user_id,
+            "username": username,
+            "role": role,
+            "department": department,
+            "full_name": full_name,
+            "email": new_user["email"]
+        }
+    }
+
+@app.put("/api/admin/users/{user_id}")
+def admin_update_user(user_id: str, req: UserUpdateRequest, token: str = Query(default=""), authorization: Optional[str] = Header(None)):
+    """Admin endpoint to edit/update a user account's profile, role, or reset password."""
+    admin_info = get_admin_user(token, authorization)
+    users = load_users()
+    
+    target_user = next((u for u in users if u.get("id") == user_id), None)
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User account not found.")
+        
+    if req.full_name is not None:
+        target_user["full_name"] = req.full_name.strip()
+    if req.email is not None:
+        target_user["email"] = req.email.strip()
+    if req.department is not None:
+        target_user["department"] = req.department.strip()
+    if req.role is not None:
+        if target_user.get("username", "").strip().lower() == "uttambhise":
+            target_user["role"] = "admin"
+        else:
+            target_user["role"] = req.role.strip() or "student"
+            
+    if req.new_password and len(req.new_password.strip()) >= 4:
+        hashed_pwd, salt = hash_password(req.new_password.strip())
+        target_user["hashed_password"] = hashed_pwd
+        target_user["salt"] = salt
+        
+    save_users(users)
+    
+    # Update active token data if user is logged in
+    for tok, info in list(active_tokens.items()):
+        if info.get("user_id") == user_id:
+            info["full_name"] = target_user["full_name"]
+            info["email"] = target_user["email"]
+            info["role"] = target_user["role"]
+            info["department"] = target_user.get("department", "")
+            
+    logger.info(f"👑 Admin '{admin_info['username']}' updated user account: '{target_user['username']}'")
+    return {"status": "success", "message": f"User account '{target_user['username']}' updated successfully.", "user": target_user}
+
+@app.delete("/api/admin/users/{user_id}")
+def admin_delete_user(user_id: str, token: str = Query(default=""), authorization: Optional[str] = Header(None)):
+    """Admin endpoint to delete/revoke a user account."""
+    admin_info = get_admin_user(token, authorization)
+    users = load_users()
+    
+    target_user = next((u for u in users if u.get("id") == user_id), None)
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User account not found.")
+        
+    if target_user.get("username", "").strip().lower() == "uttambhise":
+        raise HTTPException(status_code=400, detail="Cannot delete primary administrator account UttamBhise.")
+        
+    users = [u for u in users if u.get("id") != user_id]
+    save_users(users)
+    
+    # Invalidate active session tokens for deleted user
+    for tok, info in list(active_tokens.items()):
+        if info.get("user_id") == user_id:
+            del active_tokens[tok]
+            
+    logger.info(f"👑 Admin '{admin_info['username']}' deleted user account: '{target_user['username']}'")
+    return {"status": "success", "message": f"User account '{target_user['username']}' deleted successfully."}
+
+@app.post("/api/auth/login")
+def login_user(req: UserLoginRequest):
+    username = req.username.strip()
+    user = get_user_by_username(username)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid username or password.")
+        
+    if not verify_password(req.password, user.get("salt", ""), user.get("hashed_password", "")):
+        raise HTTPException(status_code=401, detail="Invalid username or password.")
+        
+    token = secrets.token_hex(24)
+    role = user.get("role", "student")
+    full_name = user.get("full_name", user["username"])
+    
+    active_tokens[token] = {
+        "user_id": user["id"],
+        "username": user["username"],
+        "role": role,
+        "department": user.get("department", ""),
+        "full_name": full_name,
+        "email": user.get("email", ""),
+        "created_at": datetime.now().isoformat()
+    }
+    
+    logger.info(f"🔑 User logged in: {user['username']} ({role})")
+    
+    return {
+        "status": "success",
+        "message": f"Welcome back, {full_name}!",
+        "token": token,
+        "user": {
+            "id": user["id"],
+            "username": user["username"],
+            "role": role,
+            "full_name": full_name,
+            "email": user.get("email", "")
+        }
+    }
+
+@app.get("/api/auth/me")
+def get_current_user(token: str = Query(default=""), authorization: Optional[str] = Header(None)):
+    req_token = token.strip()
+    if not req_token and authorization and authorization.startswith("Bearer "):
+        req_token = authorization.replace("Bearer ", "").strip()
+        
+    if req_token and req_token in active_tokens:
+        user_info = active_tokens[req_token]
+        return {
+            "authenticated": True,
+            "user": user_info
+        }
+    return {
+        "authenticated": False,
+        "user": None
+    }
+
+@app.post("/api/auth/logout")
+def logout_user(token: str = Query(default=""), authorization: Optional[str] = Header(None)):
+    req_token = token.strip()
+    if not req_token and authorization and authorization.startswith("Bearer "):
+        req_token = authorization.replace("Bearer ", "").strip()
+        
+    if req_token in active_tokens:
+        del active_tokens[req_token]
+        
+# ============================================
+# EXCEL RESULT ANALYSIS HISTORY API ENDPOINTS
+# ============================================
+
+@app.get("/api/history")
+def get_user_history(token: str = Query(default=""), authorization: Optional[str] = Header(None)):
+    """Fetches past Excel result analysis history."""
+    req_token = token.strip() if isinstance(token, str) else ""
+    if not req_token and isinstance(authorization, str) and authorization.startswith("Bearer "):
+        req_token = authorization.replace("Bearer ", "").strip()
+        
+    history = load_history()
+    
+    if req_token and req_token in active_tokens:
+        user_info = active_tokens[req_token]
+        clean_uname = user_info.get("username", "").strip().lower()
+        if user_info.get("role") == "admin" or clean_uname == "uttambhise":
+            return history
+        else:
+            return [h for h in history if h.get("user_id") == user_info.get("user_id") or h.get("username", "").strip().lower() == clean_uname]
+            
+    # Always return history entries if logged out or token refreshed so no file is lost
+    return history
+
+@app.get("/api/history/download/{history_id}")
+def download_history_excel(history_id: str, token: str = Query(default=""), authorization: Optional[str] = Header(None)):
+    """Downloads a specific historical Excel report (.xlsx)."""
+    req_token = token.strip()
+    if not req_token and authorization and authorization.startswith("Bearer "):
+        req_token = authorization.replace("Bearer ", "").strip()
+        
+    if not req_token or req_token not in active_tokens:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+        
+    user_info = active_tokens[req_token]
+    history = load_history()
+    entry = next((h for h in history if h.get("id") == history_id), None)
+    
+    if not entry:
+        raise HTTPException(status_code=404, detail="History record not found.")
+        
+    if user_info.get("role") != "admin" and entry.get("user_id") != user_info.get("user_id"):
+        raise HTTPException(status_code=403, detail="Access denied.")
+        
+    excel_path = entry.get("excel_path")
+    if not excel_path or not os.path.exists(excel_path):
+        excel_path = os.path.join(EXPORTS_DIR, entry.get("excel_file", ""))
+        
+    if not os.path.exists(excel_path):
+        raise HTTPException(status_code=404, detail="Excel report file does not exist on server.")
+        
+    filename = f"VTU_Analysis_Report_{entry['session_id'][:8]}.xlsx"
+    return FileResponse(
+        path=excel_path,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename=filename
+    )
+
+@app.delete("/api/history/{history_id}")
+def delete_history_entry(history_id: str, token: str = Query(default=""), authorization: Optional[str] = Header(None)):
+    """Deletes an Excel analysis history record and purges its stored Excel sheet."""
+    req_token = token.strip()
+    if not req_token and authorization and authorization.startswith("Bearer "):
+        req_token = authorization.replace("Bearer ", "").strip()
+        
+    if not req_token or req_token not in active_tokens:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+        
+    user_info = active_tokens[req_token]
+    history = load_history()
+    entry = next((h for h in history if h.get("id") == history_id), None)
+    
+    if not entry:
+        raise HTTPException(status_code=404, detail="History record not found.")
+        
+    clean_username = user_info.get("username", "").strip().lower()
+    if clean_username != "uttambhise":
+        raise HTTPException(status_code=403, detail="🔒 Access Denied: Deleting result analysis history is restricted to administrator UttamBhise.")
+        
+    # Delete excel file from disk if present
+    excel_path = entry.get("excel_path")
+    if excel_path and os.path.exists(excel_path):
+        try:
+            os.remove(excel_path)
+        except Exception as e:
+            logger.warning(f"Could not remove Excel file from disk: {e}")
+            
+    updated_history = [h for h in history if h.get("id") != history_id]
+    save_history(updated_history)
+    
+    return {"status": "success", "message": "Excel analysis history entry deleted."}
+
 
 @app.get("/api/download/{session_id}")
 def download_excel(session_id: str):
@@ -404,6 +853,26 @@ async def websocket_scrape(websocket: WebSocket, session_id: str):
                 "analysis": analysis_data
             }
             cleanup_old_sessions()
+
+            # Archive analysis history for user
+            user_token = config.get("auth_token", "").strip() or config.get("token", "").strip()
+            user_info = active_tokens.get(user_token)
+            
+            user_id = user_info.get("user_id", "usr_admin_uttam") if user_info else "usr_admin_uttam"
+            username = user_info.get("username", "UttamBhise") if user_info else "UttamBhise"
+
+            usn_summary = f"{len(scraped_results)} Students Scraped"
+            if target_usns:
+                usn_summary = f"{target_usns[0]} - {target_usns[-1]} ({len(scraped_results)} Scraped)"
+                
+            add_history_entry(
+                user_id=user_id,
+                username=username,
+                session_id=session_id,
+                excel_path=excel_path,
+                usn_count=len(scraped_results),
+                usn_range_summary=usn_summary
+            )
             
             await safe_send({
                 "type": "completed",

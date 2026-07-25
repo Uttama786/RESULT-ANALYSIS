@@ -1,0 +1,26 @@
+[
+  {
+    "id": "hist_0a846e10",
+    "user_id": "usr_c2945722",
+    "username": "CSE IOT",
+    "session_id": "sess-4clxfixa72s",
+    "timestamp": "2026-07-25 12:00:02",
+    "usn_count": 3,
+    "usn_range_summary": "4DM24IC001 - 4DM24IC003 (3 Scraped)",
+    "excel_file": "VTU_Results_sess-4clxfixa72s.xlsx",
+    "excel_path": "D:\\YIT\\Result Analysis\\BACKEND\\exports\\VTU_Results_sess-4clxfixa72s.xlsx",
+    "file_size_kb": 10.2
+  },
+  {
+    "id": "hist_8114b4e0",
+    "user_id": "usr_admin_uttam",
+    "username": "UttamBhise",
+    "session_id": "sess-z2dvygy9rgd",
+    "timestamp": "2026-07-25 11:50:45",
+    "usn_count": 3,
+    "usn_range_summary": "4DM24AI001 - 4DM24AI003 (3 Scraped)",
+    "excel_file": "VTU_Results_sess-z2dvygy9rgd.xlsx",
+    "excel_path": "D:\\YIT\\Result Analysis\\BACKEND\\exports\\VTU_Results_sess-z2dvygy9rgd.xlsx",
+    "file_size_kb": 10.2
+  }
+]

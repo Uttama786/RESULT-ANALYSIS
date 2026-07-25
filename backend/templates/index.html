@@ -132,6 +132,37 @@
         body.light-mode .author-card h4 {
             color: #4338ca !important;
         }
+
+        /* Profile Dropdown Menu High Contrast Override */
+        .profile-dropdown {
+            background-color: #0f172a !important;
+            border: 1px solid rgba(255, 255, 255, 0.2) !important;
+            color: #ffffff !important;
+        }
+        body.light-mode .profile-dropdown p,
+        body.light-mode .profile-dropdown span,
+        body.light-mode .profile-dropdown div,
+        body.light-mode .profile-dropdown button {
+            color: #ffffff !important;
+        }
+        body.light-mode .profile-dropdown .text-brandCyan {
+            color: #38bdf8 !important;
+        }
+        body.light-mode .profile-dropdown .text-brandRed {
+            color: #f87171 !important;
+        }
+        body.light-mode .profile-dropdown .text-brandPrimary {
+            color: #a5b4fc !important;
+        }
+        body.light-mode .profile-dropdown .text-gray-200 {
+            color: #f1f5f9 !important;
+        }
+        body.light-mode .profile-dropdown .text-gray-400 {
+            color: #cbd5e1 !important;
+        }
+        body.light-mode .profile-dropdown button:hover {
+            background-color: rgba(255, 255, 255, 0.15) !important;
+        }
         body.light-mode .author-card h5 {
             color: #0f172a !important;
         }
@@ -239,8 +270,21 @@
 
         // --- Core UI Components ---
 
-        // Custom Header with breathing connection status indicator, nav buttons, feedback system and theme toggle
-        const Header = ({ status, theme, onToggleTheme, onOpenGuide, onOpenAbout, onOpenFeedback }) => {
+        // Custom Header with breathing connection status indicator, nav buttons, feedback system, auth badge, history and theme toggle
+        const Header = ({ status, theme, onToggleTheme, onOpenGuide, onOpenAbout, onOpenFeedback, user, onOpenAuthModal, onLogout, onOpenUserMgmt, onOpenHistory, onOpenProfile }) => {
+            const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+            const profileMenuRef = useRef(null);
+
+            useEffect(() => {
+                const handleClickOutside = (event) => {
+                    if (profileMenuRef.current && !profileMenuRef.current.contains(event.target)) {
+                        setProfileMenuOpen(false);
+                    }
+                };
+                document.addEventListener("mousedown", handleClickOutside);
+                return () => document.removeEventListener("mousedown", handleClickOutside);
+            }, []);
+
             let statusColor = "bg-yellow-500 shadow-[0_0_10px_#eab308]";
             let statusText = "Ready";
             
@@ -256,81 +300,1070 @@
             }
 
             return (
-                <header class="w-full flex flex-col md:flex-row items-center justify-between p-4 sm:p-6 mb-6 sm:mb-8 glass-panel rounded-2xl gap-4">
-                    <div class="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-3 sm:gap-4 w-full md:w-auto">
-                        <div class="p-2.5 sm:p-3 bg-brandPrimary/10 rounded-xl border border-brandPrimary/20 flex-shrink-0">
-                            <svg class="w-7 h-7 sm:w-8 sm:h-8 text-brandPrimary" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 002 2h2a2 2 0 002-2z" />
-                            </svg>
-                        </div>
-                        <div>
-                            <h1 class="text-xl sm:text-2xl font-extrabold tracking-tight bg-gradient-to-r from-brandPrimary via-brandSecondary to-brandCyan bg-clip-text text-transparent text-glow">
-                                VTU RESULT ANALYSIS TOOL
-                            </h1>
-                            <p class="text-[11px] sm:text-xs text-gray-400 font-medium mt-0.5">Visual Scraping Engine & Academic Performance Dashboard</p>
+                <header class="w-full flex flex-col md:flex-row items-center justify-between p-4 sm:p-5 mb-6 sm:mb-8 glass-panel rounded-2xl gap-4 border border-white/10 shadow-xl relative z-40">
+                    {/* Left: Brand Logo & Title */}
+                    <div class="flex items-center gap-3 w-full md:w-auto justify-between md:justify-start">
+                        <div class="flex items-center gap-3">
+                            <div class="p-2 sm:p-2.5 bg-brandPrimary/10 rounded-xl border border-brandPrimary/20 flex-shrink-0">
+                                <svg class="w-6 h-6 sm:w-7 sm:h-7 text-brandPrimary" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 002 2h2a2 2 0 002-2z" />
+                                </svg>
+                            </div>
+                            <div>
+                                <h1 class="text-base sm:text-xl font-extrabold tracking-tight bg-gradient-to-r from-brandPrimary via-brandSecondary to-brandCyan bg-clip-text text-transparent text-glow leading-snug">
+                                    VTU RESULT ANALYSIS TOOL
+                                </h1>
+                                <p class="text-[10px] sm:text-xs text-gray-400 font-medium hidden xs:block">Visual Scraping Engine & Academic Dashboard</p>
+                            </div>
                         </div>
                     </div>
-                    
-                    <div class="flex flex-wrap items-center justify-center sm:justify-end gap-2 sm:gap-2.5 w-full md:w-auto">
+
+                    {/* Right: Navbar options row */}
+                    <div class="flex flex-wrap items-center justify-center md:justify-end gap-2 sm:gap-2.5 w-full md:w-auto">
+                        <div class="flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-xl border border-white/5">
+                            <span class={`w-2.5 h-2.5 rounded-full ${statusColor}`}></span>
+                            <span class="text-xs font-semibold uppercase tracking-wider text-gray-300">{statusText}</span>
+                        </div>
+
                         {/* Navigation Bar Action Buttons */}
                         <button 
                             type="button"
                             onClick={onOpenGuide}
-                            class="px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold text-gray-300 hover:text-white transition flex items-center gap-1.5"
+                            class="px-3 py-1.5 sm:py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold text-gray-300 hover:text-white transition flex items-center gap-1.5"
                         >
                             <span>📖 How to Use</span>
                         </button>
+
                         <button 
                             type="button"
                             onClick={onOpenAbout}
-                            class="px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold text-gray-300 hover:text-white transition flex items-center gap-1.5"
+                            class="px-3 py-1.5 sm:py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold text-gray-300 hover:text-white transition flex items-center gap-1.5"
                         >
-                            <span>ℹ️ About Project</span>
+                            <span>ℹ️ About</span>
                         </button>
+
                         <button 
                             type="button"
                             onClick={onOpenFeedback}
-                            class="px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl bg-brandCyan/10 hover:bg-brandCyan/20 border border-brandCyan/30 text-xs font-bold text-brandCyan hover:text-white transition flex items-center gap-1.5"
+                            class="px-3 py-1.5 sm:py-2 rounded-xl bg-brandCyan/10 hover:bg-brandCyan/20 border border-brandCyan/30 text-xs font-bold text-brandCyan hover:text-white transition flex items-center gap-1.5"
                         >
                             <span>💬 Feedback</span>
                         </button>
-                        
-                        {/* Day / Night Mode Toggle Switch */}
+
+                        {/* Theme Toggle Button */}
                         <button 
                             type="button"
                             onClick={onToggleTheme}
                             title={theme === "dark" ? "Switch to Day Mode" : "Switch to Night Mode"}
-                            class={`px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl border transition flex items-center gap-1.5 sm:gap-2 text-xs font-bold shadow-sm ${
+                            class={`px-3 py-1.5 sm:py-2 rounded-xl border transition flex items-center gap-1.5 text-xs font-bold ${
                                 theme === "dark" 
                                     ? 'bg-white/5 hover:bg-white/10 border-white/10 text-amber-400' 
                                     : 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-indigo-600'
                             }`}
                         >
-                            {theme === "dark" ? (
-                                <>
-                                    <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-                                    </svg>
-                                    <span>Day Mode ☀️</span>
-                                </>
-                            ) : (
-                                <>
-                                    <svg class="w-4 h-4 text-indigo-600" fill="currentColor" viewBox="0 0 24 24">
-                                        <path d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                                    </svg>
-                                    <span>Night Mode 🌙</span>
-                                </>
-                            )}
+                            {theme === "dark" ? "Day Mode ☀️" : "Night Mode 🌙"}
                         </button>
 
-                        <div class="flex items-center gap-2 px-3 py-2 bg-white/5 rounded-xl border border-white/5">
-                            <span class={`w-2.5 h-2.5 rounded-full ${statusColor}`}></span>
-                            <span class="text-xs font-semibold uppercase tracking-wider text-gray-300">{statusText}</span>
-                        </div>
+                        {/* User Profile Menu Dropdown (Top-Right Corner) */}
+                        {user ? (
+                            <div ref={profileMenuRef} class="relative ml-1 z-50">
+                                <button 
+                                    type="button"
+                                    onClick={() => setProfileMenuOpen(!profileMenuOpen)}
+                                    class="flex items-center gap-2 px-2.5 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl shadow-sm transition focus:outline-none"
+                                >
+                                    <div class="w-7 h-7 rounded-full bg-gradient-to-tr from-brandPrimary to-brandCyan flex items-center justify-center text-xs font-black text-white shadow-inner">
+                                        {user.full_name ? user.full_name.charAt(0).toUpperCase() : user.username.charAt(0).toUpperCase()}
+                                    </div>
+                                    <div class="hidden sm:flex flex-col text-left">
+                                        <span class="text-xs font-extrabold text-white leading-none">{user.full_name || user.username}</span>
+                                        <span class="text-[9px] font-bold text-brandCyan leading-tight mt-0.5">
+                                            {user.role === "admin" ? "👑 Admin" : "🎓 Student"}
+                                        </span>
+                                    </div>
+                                    <svg class={`w-3.5 h-3.5 text-gray-400 transition-transform ${profileMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+                                    </svg>
+                                </button>
+
+                                 {/* User Profile Dropdown Submenu */}
+                                {profileMenuOpen && (
+                                    <div class="absolute right-0 top-full mt-2 w-60 bg-slate-900/95 backdrop-blur-2xl rounded-2xl border border-white/20 shadow-2xl p-2.5 z-50 animate-fade-in profile-dropdown">
+                                        <div class="px-3 py-2 border-b border-white/10 mb-1.5">
+                                            <p class="text-xs font-bold text-white truncate">{user.full_name || user.username}</p>
+                                            <p class="text-[10px] text-brandCyan font-mono">@{user.username}</p>
+                                        </div>
+                                        <button 
+                                            type="button"
+                                            onClick={() => { setProfileMenuOpen(false); onOpenProfile(); }}
+                                            class="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-gray-200 hover:bg-white/10 hover:text-white transition flex items-center gap-2 mb-1"
+                                        >
+                                            <span>👤 Profile</span>
+                                        </button>
+                                        <button 
+                                            type="button"
+                                            onClick={() => { setProfileMenuOpen(false); onOpenHistory(); }}
+                                            class="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-gray-200 hover:bg-white/10 hover:text-white transition flex items-center gap-2"
+                                        >
+                                            <span>📂 Result Analysis History</span>
+                                        </button>
+                                        {user && user.role === "admin" && user.username && user.username.toLowerCase() === "uttambhise" && (
+                                            <button 
+                                                type="button"
+                                                onClick={() => { setProfileMenuOpen(false); onOpenUserMgmt(); }}
+                                                class="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-brandPrimary hover:bg-brandPrimary/10 transition flex items-center gap-2 mt-1"
+                                            >
+                                                <span>👥 Manage Users</span>
+                                            </button>
+                                        )}
+                                        <div class="border-t border-white/10 mt-1.5 pt-1.5">
+                                            <button 
+                                                type="button"
+                                                onClick={() => { setProfileMenuOpen(false); onLogout(); }}
+                                                class="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-brandRed hover:bg-brandRed/10 transition flex items-center gap-2"
+                                            >
+                                                <span>🚪 Sign Out</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <button 
+                                type="button"
+                                onClick={onOpenAuthModal}
+                                class="px-3.5 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-brandPrimary to-brandSecondary text-xs font-extrabold text-white transition button-glow shadow-md shadow-brandPrimary/20 flex items-center gap-1.5 ml-1"
+                            >
+                                <span>🔐 Login</span>
+                            </button>
+                        )}
                     </div>
                 </header>
             );
         };
+
+        // --- User Profile Details Modal ---
+        const ProfileModal = ({ isOpen, onClose, user, onLogout }) => {
+            if (!isOpen || !user) return null;
+            return (
+                <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+                    <div class="w-full max-w-md glass-panel-heavy p-6 md:p-8 rounded-3xl border border-white/10 shadow-2xl relative">
+                        <button onClick={onClose} class="absolute top-4 right-4 text-gray-400 hover:text-white p-2 rounded-xl bg-white/5 border border-white/5 font-bold transition">✕</button>
+                        
+                        <div class="text-center mb-6">
+                            <div class="w-16 h-16 rounded-full bg-gradient-to-tr from-brandPrimary via-brandSecondary to-brandCyan flex items-center justify-center text-2xl font-black text-white mx-auto mb-3 shadow-lg shadow-brandPrimary/30">
+                                {user.full_name ? user.full_name.charAt(0).toUpperCase() : user.username.charAt(0).toUpperCase()}
+                            </div>
+                            <h3 class="text-xl font-black text-white">{user.full_name || user.username}</h3>
+                            <p class="text-xs text-brandCyan font-mono mt-0.5">@{user.username}</p>
+                            <span class={`inline-block mt-2 px-3 py-1 rounded-full text-xs font-extrabold ${user.role === "admin" ? "bg-brandPrimary/20 text-brandPrimary border border-brandPrimary/30" : "bg-brandCyan/20 text-brandCyan border border-brandCyan/30"}`}>
+                                {user.role === "admin" ? "👑 System Administrator" : "🎓 Student / Viewer"}
+                            </span>
+                        </div>
+
+                        <div class="space-y-3 bg-white/5 p-4 rounded-2xl border border-white/10 text-xs mb-6">
+                            <div class="flex justify-between items-center pb-2 border-b border-white/5">
+                                <span class="text-gray-400 font-medium">Full Name</span>
+                                <span class="font-bold text-white">{user.full_name || "—"}</span>
+                            </div>
+                            <div class="flex justify-between items-center pb-2 border-b border-white/5">
+                                <span class="text-gray-400 font-medium">Username</span>
+                                <span class="font-bold font-mono text-white">{user.username}</span>
+                            </div>
+                            <div class="flex justify-between items-center pb-2 border-b border-white/5">
+                                <span class="text-gray-400 font-medium">Email Address</span>
+                                <span class="font-bold text-white">{user.email || "—"}</span>
+                            </div>
+                            <div class="flex justify-between items-center pb-2 border-b border-white/5">
+                                <span class="text-gray-400 font-medium">Department</span>
+                                <span class="font-bold text-white">{user.department || "Computer Science & Engineering"}</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-gray-400 font-medium">User Role</span>
+                                <span class="font-bold text-white uppercase">{user.role}</span>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-3">
+                            <button 
+                                onClick={() => { onClose(); onLogout(); }} 
+                                class="w-full py-2.5 bg-brandRed/15 hover:bg-brandRed/25 border border-brandRed/30 text-brandRed font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5"
+                            >
+                                <span>🚪 Sign Out</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Glassmorphic Authentication & Login Modal ---
+        const AuthModal = ({ isOpen, onClose, onAuthSuccess }) => {
+            if (!isOpen) return null;
+            const [authMode, setAuthMode] = useState("login"); // "login" or "register"
+            const [username, setUsername] = useState("");
+            const [password, setPassword] = useState("");
+            const [fullName, setFullName] = useState("");
+            const [email, setEmail] = useState("");
+            const [role, setRole] = useState("student");
+            const [error, setError] = useState("");
+            const [loading, setLoading] = useState(false);
+
+            const handleQuickFill = (type) => {
+                setError("");
+                setAuthMode("login");
+                if (type === "admin") {
+                    setUsername("admin");
+                    setPassword("admin123");
+                } else {
+                    setUsername("student");
+                    setPassword("student123");
+                }
+            };
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setError("");
+                setLoading(true);
+
+                const endpoint = authMode === "login" ? "/api/auth/login" : "/api/auth/register";
+                const payload = authMode === "login" 
+                    ? { username, password }
+                    : { username, password, full_name: fullName, email, role };
+
+                try {
+                    const res = await fetch(endpoint, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(payload)
+                    });
+                    const data = await res.json();
+                    if (!res.ok) {
+                        throw new Error(data.detail || "Authentication failed.");
+                    }
+                    localStorage.setItem("vtu_auth_token", data.token);
+                    localStorage.setItem("vtu_auth_user", JSON.stringify(data.user));
+                    onAuthSuccess(data.user, data.token);
+                    onClose();
+                } catch (err) {
+                    setError(err.message || "An error occurred during authentication.");
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            return (
+                <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+                    <div class="w-full max-w-md glass-panel-heavy p-6 md:p-8 rounded-3xl border border-white/10 shadow-2xl relative">
+                        <button 
+                            onClick={onClose} 
+                            class="absolute top-5 right-5 text-gray-400 hover:text-white p-2 rounded-xl bg-white/5 border border-white/5 font-bold transition"
+                        >
+                            ✕
+                        </button>
+
+                        <div class="text-center mb-6">
+                            <div class="inline-flex p-3 bg-brandPrimary/10 rounded-2xl border border-brandPrimary/20 mb-3">
+                                <svg class="w-8 h-8 text-brandPrimary" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                </svg>
+                            </div>
+                            <h3 class="text-2xl font-black bg-gradient-to-r from-brandPrimary via-brandSecondary to-brandCyan bg-clip-text text-transparent">
+                                {authMode === "login" ? "Welcome Back" : "Create Account"}
+                            </h3>
+                            <p class="text-xs text-gray-400 mt-1">
+                                {authMode === "login" ? "Sign in to access your result analysis dashboard" : "Register to save & track academic performance"}
+                            </p>
+                        </div>
+
+                        {/* Tab Switcher */}
+                        <div class="flex p-1 bg-black/40 rounded-xl border border-white/5 mb-6">
+                            <button 
+                                type="button"
+                                onClick={() => { setAuthMode("login"); setError(""); }}
+                                class={`flex-1 py-2 text-xs font-bold rounded-lg transition ${authMode === "login" ? "bg-brandPrimary text-white shadow-md shadow-brandPrimary/30" : "text-gray-400 hover:text-white"}`}
+                            >
+                                🔑 Sign In
+                            </button>
+                            <button 
+                                type="button"
+                                onClick={() => { setAuthMode("register"); setError(""); }}
+                                class={`flex-1 py-2 text-xs font-bold rounded-lg transition ${authMode === "register" ? "bg-brandPrimary text-white shadow-md shadow-brandPrimary/30" : "text-gray-400 hover:text-white"}`}
+                            >
+                                ✨ Register
+                            </button>
+                        </div>
+
+                        {/* Quick Demo Fill Buttons */}
+                        {authMode === "login" && (
+                            <div class="mb-5 p-3 bg-brandPrimary/5 border border-brandPrimary/15 rounded-xl">
+                                <div class="text-[10px] font-bold uppercase tracking-wider text-brandPrimary mb-2 flex items-center gap-1">
+                                    <span>⚡ Quick Test Login (Click to Auto-fill)</span>
+                                </div>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <button 
+                                        type="button"
+                                        onClick={() => handleQuickFill("admin")}
+                                        class="px-2.5 py-1.5 bg-white/5 hover:bg-brandPrimary/20 border border-white/10 hover:border-brandPrimary/30 rounded-lg text-xs font-bold text-gray-200 flex items-center justify-center gap-1 transition"
+                                    >
+                                        <span>👑 Demo Admin</span>
+                                    </button>
+                                    <button 
+                                        type="button"
+                                        onClick={() => handleQuickFill("student")}
+                                        class="px-2.5 py-1.5 bg-white/5 hover:bg-brandCyan/20 border border-white/10 hover:border-brandCyan/30 rounded-lg text-xs font-bold text-gray-200 flex items-center justify-center gap-1 transition"
+                                    >
+                                        <span>🎓 Demo Student</span>
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {error && (
+                            <div class="mb-4 p-3 bg-brandRed/15 border border-brandRed/30 text-brandRed text-xs font-semibold rounded-xl flex items-center gap-2">
+                                <span>⚠️ {error}</span>
+                            </div>
+                        )}
+
+                        <form onSubmit={handleSubmit} class="space-y-4">
+                            <div>
+                                <label class="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1">Username</label>
+                                <input 
+                                    type="text" 
+                                    required
+                                    placeholder="e.g. admin or 4DM21CS001"
+                                    value={username}
+                                    onChange={(e) => setUsername(e.target.value)}
+                                    class="w-full bg-black/40 border border-white/10 focus:border-brandPrimary focus:outline-none rounded-xl px-4 py-2.5 text-sm text-white transition"
+                                />
+                            </div>
+
+                            {authMode === "register" && (
+                                <>
+                                    <div>
+                                        <label class="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1">Full Name</label>
+                                        <input 
+                                            type="text" 
+                                            placeholder="Enter your full name"
+                                            value={fullName}
+                                            onChange={(e) => setFullName(e.target.value)}
+                                            class="w-full bg-black/40 border border-white/10 focus:border-brandPrimary focus:outline-none rounded-xl px-4 py-2.5 text-sm text-white transition"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1">Email Address</label>
+                                        <input 
+                                            type="email" 
+                                            placeholder="name@example.com"
+                                            value={email}
+                                            onChange={(e) => setEmail(e.target.value)}
+                                            class="w-full bg-black/40 border border-white/10 focus:border-brandPrimary focus:outline-none rounded-xl px-4 py-2.5 text-sm text-white transition"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1">Account Role</label>
+                                        <select 
+                                            value={role}
+                                            onChange={(e) => setRole(e.target.value)}
+                                            class="w-full bg-black/40 border border-white/10 focus:border-brandPrimary focus:outline-none rounded-xl px-4 py-2.5 text-sm text-white transition"
+                                        >
+                                            <option value="student" class="bg-gray-900">🎓 Student / Viewer</option>
+                                            <option value="admin" class="bg-gray-900">👑 Faculty / Admin</option>
+                                        </select>
+                                    </div>
+                                </>
+                            )}
+
+                            <div>
+                                <label class="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1">Password</label>
+                                <input 
+                                    type="password" 
+                                    required
+                                    placeholder="••••••••"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    class="w-full bg-black/40 border border-white/10 focus:border-brandPrimary focus:outline-none rounded-xl px-4 py-2.5 text-sm text-white transition"
+                                />
+                            </div>
+
+                            <button 
+                                type="submit" 
+                                disabled={loading}
+                                class="w-full mt-2 bg-gradient-to-r from-brandPrimary via-brandSecondary to-brandCyan rounded-xl py-3 text-sm font-bold text-white tracking-wider button-glow shadow-lg shadow-brandPrimary/30 flex items-center justify-center gap-2"
+                            >
+                                {loading ? (
+                                    <svg class="w-5 h-5 animate-spin text-white" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                ) : (
+                                    <span>{authMode === "login" ? "Sign In Now 🚀" : "Create Account ✨"}</span>
+                                )}
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Mandatory Full Screen Login Gateway (Admin Controlled Access) ---
+        const LoginScreen = ({ onAuthSuccess, theme, onToggleTheme }) => {
+            const [username, setUsername] = useState("");
+            const [password, setPassword] = useState("");
+            const [error, setError] = useState("");
+            const [loading, setLoading] = useState(false);
+
+            const handleQuickFill = (type) => {
+                setError("");
+                if (type === "admin") {
+                    setUsername("admin");
+                    setPassword("admin123");
+                } else {
+                    setUsername("student");
+                    setPassword("student123");
+                }
+            };
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setError("");
+                setLoading(true);
+
+                try {
+                    const res = await fetch("/api/auth/login", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ username, password })
+                    });
+                    const data = await res.json();
+                    if (!res.ok) {
+                        throw new Error(data.detail || "Authentication failed.");
+                    }
+                    localStorage.setItem("vtu_auth_token", data.token);
+                    localStorage.setItem("vtu_auth_user", JSON.stringify(data.user));
+                    onAuthSuccess(data.user, data.token);
+                } catch (err) {
+                    setError(err.message || "An error occurred during authentication.");
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            return (
+                <div class="min-h-screen flex flex-col items-center justify-center p-4 sm:p-6 relative overflow-hidden">
+                    {/* Top theme switch button */}
+                    <div class="absolute top-6 right-6 z-20">
+                        <button 
+                            type="button"
+                            onClick={onToggleTheme}
+                            class={`px-3.5 py-2 rounded-xl border transition flex items-center gap-2 text-xs font-bold shadow-sm ${
+                                theme === "dark" 
+                                    ? 'bg-white/5 hover:bg-white/10 border-white/10 text-amber-400' 
+                                    : 'bg-white hover:bg-slate-100 border-slate-300 text-indigo-600 shadow-md'
+                            }`}
+                        >
+                            {theme === "dark" ? "Day Mode ☀️" : "Night Mode 🌙"}
+                        </button>
+                    </div>
+
+                    <div class="w-full max-w-md glass-panel-heavy p-6 md:p-8 rounded-3xl border border-white/10 shadow-2xl z-10">
+                        <div class="text-center mb-6">
+                            <div class="inline-flex p-3.5 bg-brandPrimary/10 rounded-2xl border border-brandPrimary/20 mb-3 shadow-md">
+                                <svg class="w-10 h-10 text-brandPrimary" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                </svg>
+                            </div>
+                            <h1 class="text-2xl font-black bg-gradient-to-r from-brandPrimary via-brandSecondary to-brandCyan bg-clip-text text-transparent tracking-tight text-glow">
+                                VTU RESULT ANALYSIS TOOL
+                            </h1>
+                            <p class="text-xs text-gray-400 font-medium mt-1">Please sign in to unlock your result analytics portal</p>
+                        </div>
+
+
+
+                        {error && (
+                            <div class="mb-4 p-3 bg-brandRed/15 border border-brandRed/30 text-brandRed text-xs font-semibold rounded-xl flex items-center gap-2">
+                                <span>⚠️ {error}</span>
+                            </div>
+                        )}
+
+                        <form onSubmit={handleSubmit} class="space-y-4">
+                            <div>
+                                <label class="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1">Username</label>
+                                <input 
+                                    type="text" 
+                                    required
+                                    placeholder="Enter username (e.g. UttamBhise)"
+                                    value={username}
+                                    onChange={(e) => setUsername(e.target.value)}
+                                    class="w-full bg-black/40 border border-white/10 focus:border-brandPrimary focus:outline-none rounded-xl px-4 py-2.5 text-sm text-white transition"
+                                />
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1">Password</label>
+                                <input 
+                                    type="password" 
+                                    required
+                                    placeholder="••••••••"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    class="w-full bg-black/40 border border-white/10 focus:border-brandPrimary focus:outline-none rounded-xl px-4 py-2.5 text-sm text-white transition"
+                                />
+                            </div>
+
+                            <button 
+                                type="submit" 
+                                disabled={loading}
+                                class="w-full mt-2 bg-gradient-to-r from-brandPrimary via-brandSecondary to-brandCyan rounded-xl py-3.5 text-sm font-bold text-white tracking-wider button-glow shadow-lg shadow-brandPrimary/30 flex items-center justify-center gap-2"
+                            >
+                                {loading ? (
+                                    <svg class="w-5 h-5 animate-spin text-white" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                ) : (
+                                    <span>Sign In & Unlock Portal 🚀</span>
+                                )}
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Admin User Account Management Modal ---
+        const UserManagementModal = ({ isOpen, onClose, user }) => {
+            if (!isOpen) return null;
+
+            const isUttamAdmin = user && user.role === "admin" && user.username && user.username.toLowerCase() === "uttambhise";
+
+            if (!isUttamAdmin) {
+                return (
+                    <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+                        <div class="w-full max-w-md glass-panel-heavy p-6 rounded-3xl border border-white/10 text-center shadow-2xl">
+                            <span class="text-4xl block mb-2">🔒</span>
+                            <h3 class="text-xl font-bold text-white mb-2">Access Denied</h3>
+                            <p class="text-xs text-gray-400 mb-6">User account management CRUD operations are strictly restricted to primary administrator UttamBhise.</p>
+                            <button onClick={onClose} class="px-5 py-2.5 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl text-xs transition">Close</button>
+                        </div>
+                    </div>
+                );
+            }
+
+            const [users, setUsers] = useState([]);
+            const [loadingUsers, setLoadingUsers] = useState(true);
+            const [username, setUsername] = useState("");
+            const [password, setPassword] = useState("");
+            const [fullName, setFullName] = useState("");
+            const [email, setEmail] = useState("");
+            const [role, setRole] = useState("student");
+            const [department, setDepartment] = useState("");
+            const [msg, setMsg] = useState({ type: "", text: "" });
+            const [creating, setCreating] = useState(false);
+
+            // Edit User State
+            const [editingUser, setEditingUser] = useState(null);
+            const [editFullName, setEditFullName] = useState("");
+            const [editEmail, setEditEmail] = useState("");
+            const [editRole, setEditRole] = useState("student");
+            const [editDepartment, setEditDepartment] = useState("");
+            const [editPassword, setEditPassword] = useState("");
+            const [updating, setUpdating] = useState(false);
+
+            const token = localStorage.getItem("vtu_auth_token") || "";
+
+            const fetchUsers = async () => {
+                setLoadingUsers(true);
+                try {
+                    const res = await fetch(`/api/admin/users?token=${encodeURIComponent(token)}`);
+                    const data = await res.json();
+                    if (res.ok) {
+                        setUsers(data);
+                    }
+                } catch (e) {
+                    console.error("Failed to load users:", e);
+                } finally {
+                    setLoadingUsers(false);
+                }
+            };
+
+            useEffect(() => {
+                if (isOpen) fetchUsers();
+            }, [isOpen]);
+
+            const handleCreateUser = async (e) => {
+                e.preventDefault();
+                setMsg({ type: "", text: "" });
+                setCreating(true);
+
+                try {
+                    const res = await fetch(`/api/admin/users?token=${encodeURIComponent(token)}`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            username,
+                            password,
+                            full_name: fullName,
+                            email,
+                            role,
+                            department
+                        })
+                    });
+                    const data = await res.json();
+                    if (!res.ok) {
+                        throw new Error(data.detail || "Failed to create user account.");
+                    }
+                    setMsg({ type: "success", text: data.message || "User account created successfully!" });
+                    setUsername("");
+                    setPassword("");
+                    setFullName("");
+                    setEmail("");
+                    setRole("student");
+                    setDepartment("");
+                    fetchUsers();
+                } catch (err) {
+                    setMsg({ type: "error", text: err.message });
+                } finally {
+                    setCreating(false);
+                }
+            };
+
+            const startEdit = (u) => {
+                setEditingUser(u);
+                setEditFullName(u.full_name || "");
+                setEditEmail(u.email || "");
+                setEditRole(u.role || "student");
+                setEditDepartment(u.department || "");
+                setEditPassword("");
+            };
+
+            const handleUpdateUser = async (e) => {
+                e.preventDefault();
+                if (!editingUser) return;
+                setUpdating(true);
+                setMsg({ type: "", text: "" });
+
+                try {
+                    const res = await fetch(`/api/admin/users/${editingUser.id}?token=${encodeURIComponent(token)}`, {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            full_name: editFullName,
+                            email: editEmail,
+                            role: editRole,
+                            department: editDepartment,
+                            new_password: editPassword
+                        })
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.detail || "Failed to update user account.");
+                    setMsg({ type: "success", text: data.message || "User account updated successfully!" });
+                    setEditingUser(null);
+                    fetchUsers();
+                } catch (err) {
+                    setMsg({ type: "error", text: err.message });
+                } finally {
+                    setUpdating(false);
+                }
+            };
+
+            const handleDeleteUser = async (userId, userUname) => {
+                if (!confirm(`Are you sure you want to delete user account '${userUname}'?`)) return;
+                setMsg({ type: "", text: "" });
+                try {
+                    const res = await fetch(`/api/admin/users/${userId}?token=${encodeURIComponent(token)}`, {
+                        method: "DELETE"
+                    });
+                    const data = await res.json();
+                    if (!res.ok) {
+                        throw new Error(data.detail || "Failed to delete user account.");
+                    }
+                    setMsg({ type: "success", text: data.message });
+                    fetchUsers();
+                } catch (err) {
+                    setMsg({ type: "error", text: err.message });
+                }
+            };
+
+            return (
+                <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+                    <div class="w-full max-w-5xl glass-panel-heavy p-6 md:p-8 rounded-3xl border border-white/10 shadow-2xl max-h-[90vh] overflow-y-auto scrollbar-thin">
+                        <div class="flex items-center justify-between pb-4 border-b border-white/10 mb-6">
+                            <div class="flex items-center gap-3">
+                                <span class="text-2xl">👥</span>
+                                <div>
+                                    <h3 class="text-xl font-bold text-white">Admin User Account Management</h3>
+                                    <p class="text-xs text-gray-400">Provision, edit, and revoke authorized user accounts</p>
+                                </div>
+                            </div>
+                            <button onClick={onClose} class="text-gray-400 hover:text-white p-2 rounded-xl bg-white/5 border border-white/5 font-bold transition">✕</button>
+                        </div>
+
+                        {msg.text && (
+                            <div class={`mb-6 p-3.5 rounded-xl border text-xs font-semibold flex items-center gap-2 ${msg.type === "error" ? "bg-brandRed/15 border-brandRed/30 text-brandRed" : "bg-brandGreen/15 border-brandGreen/30 text-brandGreen"}`}>
+                                <span>{msg.type === "error" ? "⚠️" : "✅"} {msg.text}</span>
+                            </div>
+                        )}
+
+                        {/* Provision New User Form */}
+                        <div class="glass-panel p-5 rounded-2xl mb-8 border border-white/5">
+                            <h4 class="text-sm font-bold text-brandPrimary uppercase tracking-wider mb-4 flex items-center gap-2">
+                                <span>✨ Provision New Authorized User</span>
+                            </h4>
+                            <form onSubmit={handleCreateUser} class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                <div>
+                                    <label class="block text-[11px] font-bold text-gray-300 uppercase mb-1">Username *</label>
+                                    <input 
+                                        type="text" 
+                                        required 
+                                        placeholder="e.g. faculty_cs or 4DM21CS045"
+                                        value={username} 
+                                        onChange={e => setUsername(e.target.value)} 
+                                        class="w-full bg-black/40 border border-white/10 focus:border-brandPrimary focus:outline-none rounded-xl px-3.5 py-2 text-xs text-white"
+                                    />
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-bold text-gray-300 uppercase mb-1">Temporary Password *</label>
+                                    <input 
+                                        type="password" 
+                                        required 
+                                        placeholder="Set initial password"
+                                        value={password} 
+                                        onChange={e => setPassword(e.target.value)} 
+                                        class="w-full bg-black/40 border border-white/10 focus:border-brandPrimary focus:outline-none rounded-xl px-3.5 py-2 text-xs text-white"
+                                    />
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-bold text-gray-300 uppercase mb-1">Full Name</label>
+                                    <input 
+                                        type="text" 
+                                        placeholder="e.g. Prof. Ramesh Kumar"
+                                        value={fullName} 
+                                        onChange={e => setFullName(e.target.value)} 
+                                        class="w-full bg-black/40 border border-white/10 focus:border-brandPrimary focus:outline-none rounded-xl px-3.5 py-2 text-xs text-white"
+                                    />
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-bold text-gray-300 uppercase mb-1">Email Address</label>
+                                    <input 
+                                        type="email" 
+                                        placeholder="user@vtu.ac.in"
+                                        value={email} 
+                                        onChange={e => setEmail(e.target.value)} 
+                                        class="w-full bg-black/40 border border-white/10 focus:border-brandPrimary focus:outline-none rounded-xl px-3.5 py-2 text-xs text-white"
+                                    />
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-bold text-gray-300 uppercase mb-1">User Role / Designation *</label>
+                                    <input 
+                                        type="text" 
+                                        placeholder="e.g. Faculty, HOD, Student, Admin"
+                                        value={role} 
+                                        onChange={e => setRole(e.target.value)} 
+                                        class="w-full bg-black/40 border border-white/10 focus:border-brandPrimary focus:outline-none rounded-xl px-3.5 py-2 text-xs text-white font-semibold"
+                                    />
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-bold text-gray-300 uppercase mb-1">Department Name *</label>
+                                    <input 
+                                        type="text" 
+                                        placeholder="e.g. Computer Science & Eng. (CSE)"
+                                        value={department} 
+                                        onChange={e => setDepartment(e.target.value)} 
+                                        class="w-full bg-black/40 border border-white/10 focus:border-brandPrimary focus:outline-none rounded-xl px-3.5 py-2 text-xs text-white font-semibold"
+                                    />
+                                </div>
+                                <div class="sm:col-span-2 lg:col-span-3 flex items-end justify-end pt-2">
+                                    <button 
+                                        type="submit" 
+                                        disabled={creating}
+                                        class="w-full sm:w-auto px-6 bg-gradient-to-r from-brandPrimary to-brandSecondary rounded-xl py-2.5 text-xs font-bold text-white shadow-md shadow-brandPrimary/20 hover:opacity-95 button-glow flex items-center justify-center gap-1.5"
+                                    >
+                                        {creating ? "Creating User..." : "➕ Create User Account"}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+
+                        {/* Edit User Modal Overlay */}
+                        {editingUser && (
+                            <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+                                <div class="w-full max-w-lg glass-panel-heavy p-6 rounded-3xl border border-white/15 shadow-2xl relative">
+                                    <button onClick={() => setEditingUser(null)} class="absolute top-4 right-4 text-gray-400 hover:text-white p-2 rounded-xl bg-white/5 font-bold transition">✕</button>
+                                    <div class="flex items-center gap-3 pb-3 border-b border-white/10 mb-5">
+                                        <span class="text-2xl">✏️</span>
+                                        <div>
+                                            <h4 class="text-lg font-bold text-white">Edit User Account</h4>
+                                            <p class="text-xs text-brandCyan font-mono">@{editingUser.username}</p>
+                                        </div>
+                                    </div>
+                                    <form onSubmit={handleUpdateUser} class="space-y-4">
+                                        <div>
+                                            <label class="block text-[11px] font-bold text-gray-300 uppercase mb-1">Full Name</label>
+                                            <input 
+                                                type="text" 
+                                                value={editFullName} 
+                                                onChange={e => setEditFullName(e.target.value)} 
+                                                class="w-full bg-black/40 border border-white/10 focus:border-brandCyan focus:outline-none rounded-xl px-3.5 py-2 text-xs text-white"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label class="block text-[11px] font-bold text-gray-300 uppercase mb-1">Email Address</label>
+                                            <input 
+                                                type="email" 
+                                                value={editEmail} 
+                                                onChange={e => setEditEmail(e.target.value)} 
+                                                class="w-full bg-black/40 border border-white/10 focus:border-brandCyan focus:outline-none rounded-xl px-3.5 py-2 text-xs text-white"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label class="block text-[11px] font-bold text-gray-300 uppercase mb-1">User Role / Designation</label>
+                                            <input 
+                                                type="text" 
+                                                placeholder="e.g. Faculty, HOD, Student, Admin"
+                                                disabled={editingUser.username.toLowerCase() === "uttambhise"}
+                                                value={editRole} 
+                                                onChange={e => setEditRole(e.target.value)} 
+                                                class="w-full bg-black/40 border border-white/10 focus:border-brandCyan focus:outline-none rounded-xl px-3.5 py-2 text-xs text-white font-semibold disabled:opacity-50"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label class="block text-[11px] font-bold text-gray-300 uppercase mb-1">Department Name</label>
+                                            <input 
+                                                type="text" 
+                                                placeholder="e.g. Computer Science & Eng. (CSE)"
+                                                value={editDepartment} 
+                                                onChange={e => setEditDepartment(e.target.value)} 
+                                                class="w-full bg-black/40 border border-white/10 focus:border-brandCyan focus:outline-none rounded-xl px-3.5 py-2 text-xs text-white font-semibold"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label class="block text-[11px] font-bold text-gray-300 uppercase mb-1">Reset Password (Optional)</label>
+                                            <input 
+                                                type="password" 
+                                                placeholder="Leave blank to keep existing password" 
+                                                value={editPassword} 
+                                                onChange={e => setEditPassword(e.target.value)} 
+                                                class="w-full bg-black/40 border border-white/10 focus:border-brandCyan focus:outline-none rounded-xl px-3.5 py-2 text-xs text-white"
+                                            />
+                                        </div>
+                                        <div class="flex items-center justify-end gap-2 pt-2">
+                                            <button type="button" onClick={() => setEditingUser(null)} class="px-4 py-2 bg-white/5 hover:bg-white/10 text-gray-300 rounded-xl text-xs font-bold transition">Cancel</button>
+                                            <button type="submit" disabled={updating} class="px-5 py-2 bg-gradient-to-r from-brandCyan to-brandPrimary text-white rounded-xl text-xs font-bold shadow-md hover:opacity-95 button-glow transition">
+                                                {updating ? "Saving Changes..." : "💾 Save Changes"}
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* User Directory Table */}
+                        <div>
+                            <h4 class="text-sm font-bold text-gray-300 uppercase tracking-wider mb-3 flex items-center justify-between">
+                                <span>📋 Active System User Accounts ({users.length})</span>
+                            </h4>
+                            <div class="overflow-x-auto rounded-2xl border border-white/10">
+                                <table class="w-full text-left text-xs border-collapse">
+                                    <thead>
+                                        <tr class="bg-white/5 text-gray-400 uppercase tracking-wider font-bold border-b border-white/10">
+                                            <th class="py-3 px-4">User</th>
+                                            <th class="py-3 px-4">Department</th>
+                                            <th class="py-3 px-4">Email</th>
+                                            <th class="py-3 px-4 text-center">Role / Designation</th>
+                                            <th class="py-3 px-4">Created Date</th>
+                                            <th class="py-3 px-4 text-center">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {loadingUsers ? (
+                                            <tr>
+                                                <td colspan="6" class="py-6 text-center text-gray-400 italic">Loading user directory...</td>
+                                            </tr>
+                                        ) : users.map(u => (
+                                            <tr key={u.id} class="border-b border-white/5 hover:bg-white/5 transition">
+                                                <td class="py-3 px-4 font-bold text-white">
+                                                    <div>{u.full_name || u.username}</div>
+                                                    <div class="text-[10px] font-mono text-gray-400 font-normal">@{u.username}</div>
+                                                </td>
+                                                <td class="py-3 px-4 font-semibold text-gray-200">{u.department || "Computer Science & Engineering"}</td>
+                                                <td class="py-3 px-4 text-gray-300">{u.email || "—"}</td>
+                                                <td class="py-3 px-4 text-center">
+                                                    <span class={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold ${u.role === "admin" ? "bg-brandPrimary/20 text-brandPrimary border border-brandPrimary/30" : "bg-brandCyan/20 text-brandCyan border border-brandCyan/30"}`}>
+                                                        {u.role || "student"}
+                                                    </span>
+                                                </td>
+                                                <td class="py-3 px-4 text-gray-400 font-mono text-[11px]">{u.created_at || "—"}</td>
+                                                <td class="py-3 px-4 text-center">
+                                                    <div class="flex items-center justify-center gap-1.5">
+                                                        <button 
+                                                            onClick={() => startEdit(u)}
+                                                            title="Edit User Account"
+                                                            class="px-2.5 py-1 bg-brandCyan/10 hover:bg-brandCyan/20 border border-brandCyan/30 text-brandCyan rounded-lg text-xs font-bold transition flex items-center gap-1"
+                                                        >
+                                                            ✏️ Edit
+                                                        </button>
+                                                        {u.username.toLowerCase() !== "uttambhise" ? (
+                                                            <button 
+                                                                onClick={() => handleDeleteUser(u.id, u.username)}
+                                                                title="Revoke & Delete User Account"
+                                                                class="px-2.5 py-1 bg-brandRed/10 hover:bg-brandRed/20 border border-brandRed/30 text-brandRed rounded-lg text-xs font-bold transition flex items-center gap-1"
+                                                            >
+                                                                🗑️ Delete
+                                                            </button>
+                                                        ) : (
+                                                            <span class="text-[10px] text-brandCyan/80 font-extrabold px-1">Primary Admin</span>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Excel Result Analysis History Modal ---
+        const HistoryModal = ({ isOpen, onClose, user }) => {
+            if (!isOpen) return null;
+            const isUttamAdmin = user && user.username && user.username.toLowerCase() === "uttambhise";
+            const [history, setHistory] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [msg, setMsg] = useState({ type: "", text: "" });
+
+            const token = localStorage.getItem("vtu_auth_token") || "";
+
+            const fetchHistory = async () => {
+                setLoading(true);
+                try {
+                    const res = await fetch(`/api/history?token=${encodeURIComponent(token)}`);
+                    const data = await res.json();
+                    if (res.ok) {
+                        setHistory(data);
+                    }
+                } catch (e) {
+                    console.error("Failed to fetch analysis history:", e);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            useEffect(() => {
+                if (isOpen) fetchHistory();
+            }, [isOpen]);
+
+            const handleDelete = async (histId, fileName) => {
+                if (!confirm(`Delete Excel history report '${fileName}'?`)) return;
+                try {
+                    const res = await fetch(`/api/history/${histId}?token=${encodeURIComponent(token)}`, {
+                        method: "DELETE"
+                    });
+                    const data = await res.json();
+                    if (res.ok) {
+                        setMsg({ type: "success", text: "Excel history report deleted." });
+                        fetchHistory();
+                    } else {
+                        setMsg({ type: "error", text: data.detail || "Could not delete history." });
+                    }
+                } catch (e) {
+                    setMsg({ type: "error", text: e.message });
+                }
+            };
+
+            return (
+                <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+                    <div class="w-full max-w-4xl glass-panel-heavy p-6 md:p-8 rounded-3xl border border-white/10 shadow-2xl max-h-[90vh] overflow-y-auto scrollbar-thin">
+                        <div class="flex items-center justify-between pb-4 border-b border-white/10 mb-6">
+                            <div class="flex items-center gap-3">
+                                <span class="text-2xl">📊</span>
+                                <div>
+                                    <h3 class="text-xl font-bold text-white">Result Analysis History</h3>
+                                    <p class="text-xs text-gray-400">View and re-download saved Excel reports from your past analysis sessions</p>
+                                </div>
+                            </div>
+                            <button onClick={onClose} class="text-gray-400 hover:text-white p-2 rounded-xl bg-white/5 border border-white/5 font-bold transition">✕</button>
+                        </div>
+
+                        {msg.text && (
+                            <div class={`mb-4 p-3 rounded-xl border text-xs font-semibold flex items-center gap-2 ${msg.type === "error" ? "bg-brandRed/15 border-brandRed/30 text-brandRed" : "bg-brandGreen/15 border-brandGreen/30 text-brandGreen"}`}>
+                                <span>{msg.type === "error" ? "⚠️" : "✅"} {msg.text}</span>
+                            </div>
+                        )}
+
+                        <div class="overflow-x-auto rounded-2xl border border-white/10">
+                            <table class="w-full text-left text-xs border-collapse">
+                                <thead>
+                                    <tr class="bg-white/5 text-gray-400 uppercase tracking-wider font-bold border-b border-white/10">
+                                        <th class="py-3.5 px-4">Date & Time</th>
+                                        <th class="py-3.5 px-4">User</th>
+                                        <th class="py-3.5 px-4">Analysis Scope</th>
+                                        <th class="py-3.5 px-4">Excel File Size</th>
+                                        <th class="py-3.5 px-4 text-center">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {loading ? (
+                                        <tr>
+                                            <td colspan="5" class="py-8 text-center text-gray-400 italic">Loading analysis history...</td>
+                                        </tr>
+                                    ) : history.length === 0 ? (
+                                        <tr>
+                                            <td colspan="5" class="py-12 text-center text-gray-400">
+                                                <div class="text-3xl mb-2">📂</div>
+                                                <div class="font-bold text-white mb-1">No Saved Excel History Yet</div>
+                                                <div class="text-xs text-gray-400">Run a result analysis crawl to automatically archive Excel reports here.</div>
+                                            </td>
+                                        </tr>
+                                    ) : history.map(item => (
+                                        <tr key={item.id} class="border-b border-white/5 hover:bg-white/5 transition whitespace-nowrap">
+                                            <td class="py-3.5 px-4 font-mono font-bold text-gray-300">{item.timestamp}</td>
+                                            <td class="py-3.5 px-4 font-bold text-white">
+                                                <span class="inline-flex items-center gap-1">
+                                                    <span>👤</span>
+                                                    <span>{item.username}</span>
+                                                </span>
+                                            </td>
+                                            <td class="py-3.5 px-4 text-brandCyan font-mono font-semibold">
+                                                {item.usn_range_summary || `${item.usn_count} Students Scraped`}
+                                            </td>
+                                            <td class="py-3.5 px-4 font-mono text-gray-300">
+                                                <span class="px-2 py-0.5 bg-white/5 border border-white/10 rounded font-bold">
+                                                    {item.file_size_kb ? `${item.file_size_kb} KB` : "Excel File"}
+                                                </span>
+                                            </td>
+                                            <td class="py-3.5 px-4 text-center flex items-center justify-center gap-2">
+                                                <a 
+                                                    href={`/api/history/download/${item.id}?token=${encodeURIComponent(token)}`}
+                                                    download
+                                                    class="px-3 py-1.5 bg-gradient-to-r from-brandGreen to-brandCyan hover:opacity-95 text-white font-bold rounded-lg text-xs transition flex items-center gap-1 shadow-sm button-glow"
+                                                >
+                                                    <span>📥 Download Excel</span>
+                                                </a>
+                                                {isUttamAdmin && (
+                                                    <button 
+                                                        onClick={() => handleDelete(item.id, item.excel_file)}
+                                                        title="Delete History Entry"
+                                                        class="p-1.5 bg-brandRed/10 hover:bg-brandRed/20 border border-brandRed/30 text-brandRed rounded-lg text-xs font-bold transition"
+                                                    >
+                                                        🗑️
+                                                    </button>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
 
         // --- How to Use Guide Modal ---
         const GuideModal = ({ isOpen, onClose }) => {
@@ -967,6 +2000,55 @@
                 }
             }, [captchaRequired]);
 
+            // User Authentication State
+            const [user, setUser] = useState(() => {
+                try {
+                    const cached = localStorage.getItem("vtu_auth_user");
+                    return cached ? JSON.parse(cached) : null;
+                } catch (e) {
+                    return null;
+                }
+            });
+            const [showAuthModal, setShowAuthModal] = useState(false);
+            const [showUserMgmtModal, setShowUserMgmtModal] = useState(false);
+            const [showHistoryModal, setShowHistoryModal] = useState(false);
+            const [showProfileModal, setShowProfileModal] = useState(false);
+
+            useEffect(() => {
+                const token = localStorage.getItem("vtu_auth_token");
+                if (token) {
+                    fetch(`/api/auth/me?token=${encodeURIComponent(token)}`)
+                        .then(res => res.json())
+                        .then(data => {
+                            if (data.authenticated && data.user) {
+                                setUser(data.user);
+                                localStorage.setItem("vtu_auth_user", JSON.stringify(data.user));
+                            } else {
+                                localStorage.removeItem("vtu_auth_token");
+                                localStorage.removeItem("vtu_auth_user");
+                                setUser(null);
+                            }
+                        })
+                        .catch(() => {});
+                }
+            }, []);
+
+            const handleAuthSuccess = (userData, token) => {
+                setUser(userData);
+                setLogs(prev => [...prev, `[AUTH] Welcome, ${userData.full_name || userData.username}! Logged in as ${userData.role}.`]);
+            };
+
+            const handleLogout = async () => {
+                const token = localStorage.getItem("vtu_auth_token");
+                if (token) {
+                    fetch(`/api/auth/logout?token=${encodeURIComponent(token)}`, { method: "POST" }).catch(() => {});
+                }
+                localStorage.removeItem("vtu_auth_token");
+                localStorage.removeItem("vtu_auth_user");
+                setUser(null);
+                setLogs(prev => [...prev, `[AUTH] Logged out successfully.`]);
+            };
+
             // Add starting log
             useEffect(() => {
                 setLogs(["Result Scraping Portal is loaded and ready. Configure params and execute."]);
@@ -974,6 +2056,12 @@
 
             // Connect & Start/Resume Scraper connection
             const handleConnectAndScrape = (isResume = false) => {
+                if (!user) {
+                    setShowAuthModal(true);
+                    setLogs(prev => [...prev, "🔒 Authentication Required: Please log in or register to initiate scraping sessions."]);
+                    return;
+                }
+
                 // Input validation
                 if (inputMode === "range" && (!startUsn || !endUsn)) {
                     alert("Please input starting and ending USN numbers.");
@@ -1034,6 +2122,7 @@
 
                     // Send configs with resume parameters
                     const configPayload = {
+                        auth_token: localStorage.getItem("vtu_auth_token") || "",
                         api_key: apiKey,
                         start_usn: inputMode === "range" && !finalUsnList ? finalStart : "",
                         end_usn: inputMode === "range" && !finalUsnList ? finalEnd : "",
@@ -1172,6 +2261,17 @@
                 return matchesSearch && student.status.includes(statusFilter);
             });
 
+            // Mandatory Login Screen before accessing Home Screen
+            if (!user) {
+                return (
+                    <LoginScreen 
+                        onAuthSuccess={handleAuthSuccess} 
+                        theme={theme} 
+                        onToggleTheme={toggleTheme} 
+                    />
+                );
+            }
+
             return (
                 <div class="max-w-7xl mx-auto pb-16">
                     <Header 
@@ -1181,8 +2281,43 @@
                         onOpenGuide={() => setShowGuideModal(true)}
                         onOpenAbout={() => setShowAboutModal(true)}
                         onOpenFeedback={() => setShowFeedbackModal(true)}
+                        user={user}
+                        onOpenAuthModal={() => setShowAuthModal(true)}
+                        onLogout={handleLogout}
+                        onOpenUserMgmt={() => setShowUserMgmtModal(true)}
+                        onOpenHistory={() => setShowHistoryModal(true)}
+                        onOpenProfile={() => setShowProfileModal(true)}
                     />
                     
+                    {/* User Profile Details Modal */}
+                    <ProfileModal 
+                        isOpen={showProfileModal} 
+                        onClose={() => setShowProfileModal(false)} 
+                        user={user}
+                        onLogout={handleLogout}
+                    />
+
+                    {/* Result Analysis History Modal */}
+                    <HistoryModal 
+                        isOpen={showHistoryModal} 
+                        onClose={() => setShowHistoryModal(false)} 
+                        user={user}
+                    />
+
+                    {/* Admin User Account Management Modal */}
+                    <UserManagementModal 
+                        isOpen={showUserMgmtModal} 
+                        onClose={() => setShowUserMgmtModal(false)} 
+                        user={user}
+                    />
+
+                    {/* Authentication Login Modal */}
+                    <AuthModal 
+                        isOpen={showAuthModal} 
+                        onClose={() => setShowAuthModal(false)} 
+                        onAuthSuccess={handleAuthSuccess}
+                    />
+
                     {/* How to Use Guide Modal */}
                     <GuideModal isOpen={showGuideModal} onClose={() => setShowGuideModal(false)} />
 

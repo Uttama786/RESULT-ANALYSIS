@@ -12,3 +12,5 @@ services:
         value: bkizjhjlvazlrxho
       - key: WEB3FORMS_ACCESS_KEY
         value: 8708b761-cd16-4b79-ba2c-554eb547f017
+      - key: DATA_DIR
+        value: /app/backend/data
