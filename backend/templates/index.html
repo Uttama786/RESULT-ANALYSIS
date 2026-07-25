@@ -437,10 +437,9 @@
                             </div>
 
                             <div class="p-4 bg-gradient-to-r from-indigo-950/50 to-violet-950/50 border border-indigo-500/30 rounded-2xl text-center mt-4 space-y-1">
-                                <span class="text-xs font-bold text-indigo-300 uppercase tracking-widest block mb-1">Project Author & Lead Developer</span>
-                                <h4 class="text-lg font-extrabold text-white text-glow">Uttam Bhise</h4>
-                                <p class="text-xs text-indigo-200 font-medium">Assistant Professor at Yenepoya Institute of Technology (YIT), Moodbidri</p>
-                                <p class="text-xs text-brandCyan font-mono pt-1">📧 <a href="mailto:uttamabhise@gmail.com" class="hover:underline">uttamabhise@gmail.com</a></p>
+                                <span class="text-xs font-bold text-indigo-300 uppercase tracking-widest block mb-1">ENGINEERING INSTITUTION</span>
+                                <h4 class="text-lg font-extrabold text-white text-glow">Yenepoya Institute of Technology (YIT)</h4>
+                                <p class="text-xs text-indigo-200 font-medium">Moodbidri, Mangaluru, Karnataka</p>
                             </div>
                         </div>
 
@@ -677,31 +676,27 @@
                             </ul>
                         </div>
 
-                        {/* Author Info Card */}
+                        {/* Institution Info Card */}
                         <div class="author-card md:col-span-4 space-y-3 p-5 rounded-2xl border transition-all duration-300">
                             <div class="flex items-center justify-between">
-                                <h4 class="text-xs font-extrabold uppercase tracking-widest">Project Author</h4>
-                                <span class="author-badge px-2.5 py-0.5 rounded-full text-[10px] font-bold border">Faculty & Creator ✨</span>
+                                <h4 class="text-xs font-extrabold uppercase tracking-widest">INSTITUTION</h4>
+                                <span class="author-badge px-2.5 py-0.5 rounded-full text-[10px] font-bold border">YIT Portal ✨</span>
                             </div>
                             <div class="flex items-center gap-3.5">
                                 <div class="w-12 h-12 rounded-xl bg-gradient-to-tr from-indigo-600 to-cyan-500 flex items-center justify-center text-white font-black text-lg shadow-md flex-shrink-0">
-                                    UB
+                                    YIT
                                 </div>
                                 <div>
-                                    <h5 class="text-base font-extrabold leading-tight">Uttam Bhise</h5>
-                                    <p class="author-role text-xs font-bold mt-0.5">Assistant Professor, YIT Moodbidri</p>
+                                    <h5 class="text-sm font-extrabold leading-tight">Yenepoya Institute of Technology</h5>
+                                    <p class="author-role text-xs font-bold mt-0.5">Moodbidri, Mangaluru</p>
                                 </div>
                             </div>
-                            <p class="text-xs leading-relaxed font-medium">Designed and built with precision for automated VTU academic result analysis.</p>
-                            <div class="pt-2 border-t border-gray-200/20 flex items-center gap-2 text-xs">
-                                <span class="font-bold opacity-80">📧 Contact:</span>
-                                <a href="mailto:uttamabhise@gmail.com" class="author-email font-mono font-bold hover:underline">uttamabhise@gmail.com</a>
-                            </div>
+                            <p class="text-xs leading-relaxed font-medium">Automated academic result analysis and performance report portal for engineering departments.</p>
                         </div>
                     </div>
 
                     <div class="pt-6 border-t border-white/5 flex flex-col md:flex-row items-center justify-between text-[11px] text-gray-500 gap-2">
-                        <p>© 2026 VTU Result Analysis Platform. Developed by <span class="text-gray-300 font-bold">Uttam Bhise (YIT Moodbidri)</span>.</p>
+                        <p>© 2026 VTU Result Analysis Platform. <span class="text-gray-300 font-bold">Yenepoya Institute of Technology (YIT, Moodbidri)</span>.</p>
                         <p class="font-mono">Engineered for Academic Excellence ✨</p>
                     </div>
                 </footer>
@@ -929,6 +924,9 @@
 
             // State configs
             const [portalUrl, setPortalUrl] = useState("https://results.vtu.ac.in/");
+            const [useFastHttp, setUseFastHttp] = useState(true);
+            const [autoSolveCaptcha, setAutoSolveCaptcha] = useState(true);
+            const [sessionID, setSessionID] = useState(null);
             const [inputMode, setInputMode] = useState("range"); // range vs list
             const [startUsn, setStartUsn] = useState("");
             const [endUsn, setEndUsn] = useState("");
@@ -1041,6 +1039,8 @@
                         end_usn: inputMode === "range" && !finalUsnList ? finalEnd : "",
                         usn_list: inputMode === "list" ? finalUsnList : (finalUsnList || ""),
                         portal_url: portalUrl,
+                        use_fast_http: useFastHttp,
+                        auto_solve_captcha: autoSolveCaptcha,
                         existing_results: isResume ? scrapedResults : [],
                         completed_usns: isResume ? Array.from(processedUsns) : [],
                         start_from_usn: isResume ? (progress.usn || "") : ""
@@ -1295,8 +1295,6 @@
                                     />
                                 </div>
 
-
-                                
                                 {/* Scraper Options */}
                                 <div class="mb-4">
                                     <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Input Mode Selection</label>

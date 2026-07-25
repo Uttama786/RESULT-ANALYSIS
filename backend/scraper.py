@@ -6,12 +6,28 @@ import base64
 from io import BytesIO
 import logging
 
-from bs4 import BeautifulSoup
-from PIL import Image, ImageDraw, ImageFont
-
 # Set up logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
+
+from bs4 import BeautifulSoup
+from urllib.parse import urljoin
+from PIL import Image, ImageDraw, ImageFont, ImageEnhance
+
+# Attempt importing requests & pytesseract
+try:
+    import requests
+    import urllib3
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    REQUESTS_AVAILABLE = True
+except ImportError:
+    REQUESTS_AVAILABLE = False
+
+try:
+    import pytesseract
+    PYTESSERACT_AVAILABLE = True
+except ImportError:
+    PYTESSERACT_AVAILABLE = False
 
 # Attempt importing selenium components
 try:
@@ -25,13 +41,220 @@ try:
     SELENIUM_AVAILABLE = True
 except ImportError:
     SELENIUM_AVAILABLE = False
-    logger.warning("Selenium or webdriver_manager not installed. Real scraping will not be functional.")
+    logger.warning("Selenium or webdriver_manager not installed.")
+
+def solve_captcha_ocr(img_bytes: bytes) -> str | None:
+    """Uses PIL image binarization and Tesseract OCR to decode 6-character VTU CAPTCHA."""
+    if not PYTESSERACT_AVAILABLE:
+        return None
+    try:
+        image = Image.open(BytesIO(img_bytes)).convert("RGB")
+        w, h = image.size
+        image = image.resize((w * 2, h * 2), Image.Resampling.LANCZOS)
+        gray = image.convert("L")
+        enhancer = ImageEnhance.Contrast(gray)
+        gray = enhancer.enhance(2.5)
+        binary = gray.point(lambda p: 255 if p > 135 else 0)
+        
+        config = "--psm 6 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        text = pytesseract.image_to_string(binary, config=config).strip().upper()
+        text = re.sub(r"[^A-Z0-9]", "", text)
+        if len(text) >= 4:
+            logger.info(f"⚡ Auto-OCR solved CAPTCHA: '{text[:6]}'")
+            return text[:6]
+    except Exception as e:
+        logger.debug(f"OCR solve skipped/failed: {e}")
+    return None
+
+def solve_captcha_ocr_base64(base64_str: str) -> str | None:
+    """Decodes base64 string and runs solve_captcha_ocr."""
+    try:
+        if "," in base64_str:
+            base64_str = base64_str.split(",", 1)[1]
+        img_bytes = base64.b64decode(base64_str)
+        return solve_captcha_ocr(img_bytes)
+    except Exception:
+        return None
+
+try:
+    import ssl
+    from requests.adapters import HTTPAdapter
+    from urllib3.util.ssl_ import create_urllib3_context
+    class LegacySSLAdapter(HTTPAdapter):
+        def init_poolmanager(self, *args, **kwargs):
+            ctx = create_urllib3_context()
+            ctx.set_ciphers('DEFAULT@SECLEVEL=1')
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            kwargs['ssl_context'] = ctx
+            return super().init_poolmanager(*args, **kwargs)
+except Exception:
+    LegacySSLAdapter = None
+
+class FastHTTPScraper:
+    """
+    Direct HTTP Scraper powered by requests.Session.
+    Fetches CAPTCHAs in ~100ms and posts forms in ~200ms without browser overhead.
+    """
+    def __init__(self, session_id: str, custom_url: str = None):
+        self.session_id = session_id
+        url = (custom_url or "").strip()
+        if not url or url.rstrip("/") in ["https://results.vtu.ac.in", "http://results.vtu.ac.in"]:
+            url = "https://results.vtu.ac.in/MJ26cbcs/index.php"
+        self.portal_url = url
+        self.session = requests.Session() if REQUESTS_AVAILABLE else None
+        if self.session:
+            self.session.verify = False
+            if LegacySSLAdapter:
+                try:
+                    self.session.mount("https://", LegacySSLAdapter())
+                except Exception:
+                    pass
+            self.session.headers.update({
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Referer": self.portal_url,
+            })
+        self.form_action = None
+        self.usn_field = "lns"
+        self.captcha_field = "captchacode"
+        self.last_captcha_bytes = None
+
+    def get_captcha(self, usn: str) -> str:
+        import html
+        if not self.session:
+            raise RuntimeError("requests library not available")
+            
+        target_url = self.portal_url
+        self.session.headers.update({"Referer": target_url})
+        logger.info(f"Fast HTTP Scraper: Fetching portal page {target_url}")
+        
+        # Retry up to 3 times on connection timeout or transient network glitches
+        resp = None
+        last_err = None
+        for attempt in range(3):
+            try:
+                resp = self.session.get(target_url, timeout=(10, 20))
+                resp.raise_for_status()
+                break
+            except Exception as err:
+                last_err = err
+                logger.warning(f"Fast HTTP Scraper attempt {attempt+1}/3 failed ({err}). Retrying...")
+                time.sleep(0.5)
+
+        if not resp:
+            raise RuntimeError(f"Could not connect to VTU portal ({last_err})")
+
+        soup = BeautifulSoup(resp.text, "html.parser")
+        form = soup.find("form")
+
+        # If landing page without form, automatically find active result portal link
+        if not form:
+            portal_links = [
+                a.get("href") for a in soup.find_all("a") 
+                if a.get("href") and a.get("href").strip().lower() not in ["index.php", "./index.php", "/", "#"]
+                and ("cbcs" in a.get("href").lower() or "result" in a.get("href").lower() or "/" in a.get("href"))
+            ]
+            if portal_links:
+                first_link = html.unescape(portal_links[0])
+                target_url = urljoin(resp.url, first_link)
+            else:
+                target_url = "https://results.vtu.ac.in/MJ26cbcs/index.php"
+
+            self.session.headers.update({"Referer": target_url})
+            logger.info(f"Fast HTTP Scraper: Following portal link to {target_url}")
+            for attempt in range(2):
+                try:
+                    resp = self.session.get(target_url, timeout=(10, 20))
+                    resp.raise_for_status()
+                    break
+                except Exception:
+                    time.sleep(0.5)
+            soup = BeautifulSoup(resp.text, "html.parser")
+            form = soup.find("form")
+
+        if form:
+            action = form.get("action", "")
+            self.form_action = urljoin(resp.url, html.unescape(action)) if action else resp.url
+
+            usn_inp = form.find("input", attrs={"name": re.compile(r"lns|lnkns|usn", re.I)})
+            if usn_inp and usn_inp.get("name"):
+                self.usn_field = usn_inp["name"]
+
+            cap_inp = form.find("input", attrs={"name": re.compile(r"captcha|code", re.I)})
+            if cap_inp and cap_inp.get("name"):
+                self.captcha_field = cap_inp["name"]
+            # Store hidden input fields (e.g. Token, CSRF tokens)
+            self.hidden_fields = {inp.get("name"): inp.get("value", "") for inp in form.find_all("input", type="hidden") if inp.get("name")}
+        else:
+            self.form_action = resp.url
+            self.hidden_fields = {}
+
+        img_tag = soup.find("img", attrs={"src": lambda s: s and ("captcha" in s.lower() or "securimage" in s.lower())})
+        if not img_tag:
+            img_tag = soup.find("img", attrs={"alt": lambda a: a and "captcha" in a.lower()})
+        if not img_tag and form:
+            img_tag = form.find("img")
+
+        if not img_tag or not img_tag.get("src"):
+            raise RuntimeError("Could not locate CAPTCHA image element in HTML page")
+
+        img_src = html.unescape(img_tag["src"])
+        captcha_url = urljoin(resp.url, img_src)
+        logger.info(f"Fast HTTP Scraper: Downloading CAPTCHA from {captcha_url}")
+
+        img_resp = self.session.get(captcha_url, timeout=5)
+        img_resp.raise_for_status()
+        self.last_captcha_bytes = img_resp.content
+
+        img_b64 = base64.b64encode(img_resp.content).decode("utf-8")
+        return f"data:image/png;base64,{img_b64}"
+
+    def submit_and_scrape(self, usn: str, captcha_input: str, parse_func) -> dict:
+        import datetime
+        if not self.session:
+            raise RuntimeError("requests library not available")
+
+        action_url = self.form_action or self.portal_url
+        
+        # Build payload with hidden tokens (Token, js_token) required by VTU server
+        payload = dict(getattr(self, "hidden_fields", {}))
+        year_str = str(datetime.datetime.now().year)
+        payload["js_token"] = base64.b64encode(f"student_access_{year_str}".encode()).decode("utf-8")
+        payload[self.usn_field] = usn
+        payload[self.captcha_field] = captcha_input
+        payload["submit"] = "Submit"
+
+        logger.info(f"Fast HTTP Scraper: Submitting form for {usn} to {action_url}")
+        resp = self.session.post(action_url, data=payload, headers={"Referer": self.portal_url}, timeout=12)
+        page_src = resp.text
+        page_src_lower = page_src.lower()
+
+        if any(phrase in page_src_lower for phrase in ["invalid captcha", "captcha code required", "captcha code !!!", "enter captcha"]):
+            return {"status": "invalid_captcha", "error": "Invalid CAPTCHA code entered."}
+
+        if any(phrase in page_src_lower for phrase in ["university seat number is not available", "seat number is not available", "invalid usn", "not available or invalid"]):
+            return {"status": "not_found", "message": "University Seat Number is not available or Invalid."}
+
+        parsed_data = parse_func(page_src, usn)
+        if not parsed_data:
+            if "captcha" in page_src_lower:
+                return {"status": "invalid_captcha", "error": "Invalid CAPTCHA code entered."}
+            return {"status": "not_found", "message": "Failed to extract result table from page content."}
+
+        return {"status": "success", "data": parsed_data}
 
 class VTUScraper:
-    def __init__(self, session_id: str, custom_url: str = None, use_simulation: bool = False):
+    def __init__(self, session_id: str, custom_url: str = None, use_simulation: bool = False, use_fast_http: bool = True):
         self.session_id = session_id
-        self.portal_url = custom_url or "https://results.vtu.ac.in/"
+        url = (custom_url or "").strip()
+        if not url or url.rstrip("/") in ["https://results.vtu.ac.in", "http://results.vtu.ac.in"]:
+            url = "https://results.vtu.ac.in/MJ26cbcs/index.php"
+        self.portal_url = url
         self.use_simulation = use_simulation
+        self.use_fast_http = use_fast_http and REQUESTS_AVAILABLE
+        self.http_scraper = FastHTTPScraper(session_id, url) if self.use_fast_http else None
         self.driver = None
         self.captcha_solution = None
         
@@ -385,15 +608,24 @@ class VTUScraper:
 
     def get_captcha(self, usn: str) -> str:
         """Navigates to the portal and retrieves the captcha image as Base64 string."""
-        if self.use_simulation or not self.driver:
-            if not self.use_simulation and not self.driver:
-                logger.info("Browser driver is None. Attempting to re-initialize browser...")
-                success = self.initialize_browser()
-                if not success:
-                    self.use_simulation = True
+        if self.use_simulation:
+            logger.info("Simulation mode active: generating mock CAPTCHA image.")
+            captcha_text, captcha_img = self.generate_mock_captcha()
+            self.captcha_solution = captcha_text
+            return captcha_img
 
-            if self.use_simulation or not self.driver:
-                logger.info("Simulation mode active (or driver unavailable): generating mock CAPTCHA image.")
+        if self.use_fast_http and self.http_scraper:
+            try:
+                return self.http_scraper.get_captcha(usn)
+            except Exception as http_err:
+                logger.warning(f"Fast HTTP scraper get_captcha failed ({http_err}). Falling back to Selenium driver.")
+                self.use_fast_http = False
+
+        if not self.driver:
+            logger.info("Browser driver is None. Attempting to initialize browser...")
+            success = self.initialize_browser()
+            if not success:
+                self.use_simulation = True
                 captcha_text, captcha_img = self.generate_mock_captcha()
                 self.captcha_solution = captcha_text
                 return captcha_img
@@ -401,12 +633,11 @@ class VTUScraper:
         try:
             logger.info(f"Real Scraper: Opening results page: {self.portal_url}")
             self._safe_get(self.portal_url, timeout=10)
-            time.sleep(0.3)
+            time.sleep(0.1)
             
             # Find captcha image element
             captcha_img_el = self._find_element_by_candidates(self.captcha_img_candidates, timeout=6)
             if not captcha_img_el:
-                # Retry finding any img tag inside form
                 try:
                     imgs = self.driver.find_elements(By.XPATH, "//form//img")
                     if imgs:
@@ -417,9 +648,8 @@ class VTUScraper:
             if not captcha_img_el:
                 raise RuntimeError("Could not find the CAPTCHA image element on the VTU results portal.")
                 
-            # Take screenshot of the captcha element directly (verify non-zero rendering dimensions)
             img_bytes = None
-            for _ in range(5):
+            for _ in range(3):
                 try:
                     size = captcha_img_el.size
                     if size and size.get('width', 0) > 0 and size.get('height', 0) > 0:
@@ -428,10 +658,9 @@ class VTUScraper:
                             break
                 except Exception:
                     pass
-                time.sleep(0.3)
+                time.sleep(0.1)
 
             if not img_bytes:
-                time.sleep(0.5)
                 img_bytes = captcha_img_el.screenshot_as_png
 
             img_base64 = base64.b64encode(img_bytes).decode("utf-8")
@@ -439,13 +668,12 @@ class VTUScraper:
             
         except Exception as e:
             logger.error(f"Error fetching real CAPTCHA: {str(e)}")
-            # Try to re-initialize browser and throw
             self.close_browser()
             raise e
 
     def submit_and_scrape(self, usn: str, captcha_input: str) -> dict:
         """Submits the USN and captcha, and scrapes the result."""
-        if self.use_simulation or not self.driver:
+        if self.use_simulation:
             logger.info(f"Simulation Scraper: Submitting mock result for USN {usn}")
             name_idx = abs(hash(usn)) % len(self.mock_names)
             student_name = self.mock_names[name_idx]
@@ -456,7 +684,6 @@ class VTUScraper:
             failed_any = False
             
             for sub in subjects:
-                # Deterministic marks based on USN + subject code
                 passed = (abs(hash(usn + sub["code"])) % 100) > 15
                 if passed:
                     sub["internal"] = 30 + (abs(hash(usn + sub["code"])) % 19)
@@ -496,6 +723,16 @@ class VTUScraper:
                     "subjects": subjects
                 }
             }
+
+        if self.use_fast_http and self.http_scraper:
+            try:
+                return self.http_scraper.submit_and_scrape(usn, captcha_input, self._parse_results_page)
+            except Exception as http_err:
+                logger.warning(f"Fast HTTP scraper submit_and_scrape failed ({http_err}). Falling back to Selenium driver.")
+                self.use_fast_http = False
+
+        if not self.driver:
+            raise RuntimeError("Browser driver is not initialized.")
 
         # Real scraping submission
         main_window = None
