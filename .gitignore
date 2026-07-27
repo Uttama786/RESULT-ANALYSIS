@@ -10,3 +10,5 @@ exports/
 node_modules/
 *.log
 scratch/
+*.db
+

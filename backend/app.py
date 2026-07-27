@@ -12,6 +12,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 
+from config import DATA_DIR, EXPORTS_DIR, TEMPLATES_DIR
+from database import Base, engine, SessionLocal
+from models import User, History
 from scraper import VTUScraper, solve_captcha_ocr_base64
 from analyzer import ResultAnalyzer
 
@@ -19,14 +22,8 @@ from analyzer import ResultAnalyzer
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-# Persistent data directory support (e.g. Render Persistent Disk or local folder)
-DATA_DIR = os.getenv("DATA_DIR", os.path.dirname(os.path.abspath(__file__)))
-os.makedirs(DATA_DIR, exist_ok=True)
-
-EXPORTS_DIR = os.path.join(DATA_DIR, "exports")
-TEMPLATES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
-os.makedirs(EXPORTS_DIR, exist_ok=True)
-os.makedirs(TEMPLATES_DIR, exist_ok=True)
+# Initialize database tables (creates tables if they do not exist)
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="VTU Result Scraper & Analysis Tool",
@@ -65,92 +62,149 @@ def verify_password(password: str, salt: str, hashed: str) -> bool:
     key_hex, _ = hash_password(password, salt)
     return secrets.compare_digest(key_hex, hashed)
 
-def load_users() -> List[Dict[str, Any]]:
-    if os.path.exists(USERS_FILE):
-        try:
-            with open(USERS_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception as e:
-            logger.error(f"Error reading users.json: {e}")
-            return []
-    return []
-
-def save_users(users: List[Dict[str, Any]]):
+def migrate_json_to_db():
+    """Seamlessly imports existing users.json and history.json into the persistent database on startup."""
+    db = SessionLocal()
     try:
-        with open(USERS_FILE, "w", encoding="utf-8") as f:
-            json.dump(users, f, indent=2, ensure_ascii=False)
-    except Exception as e:
-        logger.error(f"Error writing users.json: {e}")
+        if os.path.exists(USERS_FILE):
+            try:
+                with open(USERS_FILE, "r", encoding="utf-8") as f:
+                    json_users = json.load(f)
+                migrated_count = 0
+                for u in json_users:
+                    username = u.get("username", "").strip()
+                    if username and not db.query(User).filter(User.username.ilike(username)).first():
+                        db_user = User(
+                            id=u.get("id", f"usr_{uuid.uuid4().hex[:8]}"),
+                            username=username,
+                            hashed_password=u.get("hashed_password", ""),
+                            salt=u.get("salt", ""),
+                            full_name=u.get("full_name", username),
+                            email=u.get("email", ""),
+                            role=u.get("role", "student"),
+                            department=u.get("department", ""),
+                            created_at=u.get("created_at", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+                        )
+                        db.add(db_user)
+                        migrated_count += 1
+                db.commit()
+                if migrated_count > 0:
+                    logger.info(f"📦 Migrated {migrated_count} users from users.json to database.")
+            except Exception as e:
+                logger.error(f"Error migrating users.json to database: {e}")
+                db.rollback()
+
+        if os.path.exists(HISTORY_FILE):
+            try:
+                with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+                    json_history = json.load(f)
+                migrated_hist = 0
+                for h in json_history:
+                    hist_id = h.get("id")
+                    if hist_id and not db.query(History).filter(History.id == hist_id).first():
+                        db_hist = History(
+                            id=hist_id,
+                            user_id=h.get("user_id", ""),
+                            username=h.get("username", ""),
+                            session_id=h.get("session_id", ""),
+                            timestamp=h.get("timestamp", ""),
+                            usn_count=h.get("usn_count", 0),
+                            usn_range_summary=h.get("usn_range_summary", ""),
+                            excel_file=h.get("excel_file", ""),
+                            excel_path=h.get("excel_path", ""),
+                            file_size_kb=h.get("file_size_kb", 0.0)
+                        )
+                        db.add(db_hist)
+                        migrated_hist += 1
+                db.commit()
+                if migrated_hist > 0:
+                    logger.info(f"📦 Migrated {migrated_hist} history records from history.json to database.")
+            except Exception as e:
+                logger.error(f"Error migrating history.json to database: {e}")
+                db.rollback()
+    finally:
+        db.close()
+
+migrate_json_to_db()
 
 def ensure_default_admin():
-    users = load_users()
-    if not users:
-        admin_hash, admin_salt = hash_password("#Uttama207")
-        default_admin = {
-            "id": "usr_admin_uttam",
-            "username": "UttamBhise",
-            "hashed_password": admin_hash,
-            "salt": admin_salt,
-            "full_name": "Uttam Bhise",
-            "email": "uttamabhise@gmail.com",
-            "role": "admin",
-            "department": "Computer Science & Engineering",
-            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        }
-        users.append(default_admin)
-        save_users(users)
-        logger.info("🔑 Auto-seeded default Administrator account 'UttamBhise'.")
+    db = SessionLocal()
+    try:
+        admin_user = db.query(User).filter(User.username.ilike("UttamBhise")).first()
+        if not admin_user:
+            admin_hash, admin_salt = hash_password("#Uttama207")
+            default_admin = User(
+                id="usr_admin_uttam",
+                username="UttamBhise",
+                hashed_password=admin_hash,
+                salt=admin_salt,
+                full_name="Uttam Bhise",
+                email="uttamabhise@gmail.com",
+                role="admin",
+                department="Computer Science & Engineering",
+                created_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            )
+            db.add(default_admin)
+            db.commit()
+            logger.info("🔑 Auto-seeded default Administrator account 'UttamBhise' into persistent database.")
+    except Exception as e:
+        logger.error(f"Error seeding default admin user in DB: {e}")
+        db.rollback()
+    finally:
+        db.close()
 
 ensure_default_admin()
 
 def get_user_by_username(username: str) -> Optional[Dict[str, Any]]:
-    users = load_users()
-    clean_username = username.strip().lower()
-    for user in users:
-        if user.get("username", "").strip().lower() == clean_username:
-            return user
-    return None
-
+    db = SessionLocal()
+    try:
+        clean_username = username.strip().lower()
+        user = db.query(User).filter(User.username.ilike(clean_username)).first()
+        if user:
+            return user.to_dict(include_sensitive=True)
+        return None
+    finally:
+        db.close()
 
 def load_history() -> List[Dict[str, Any]]:
-    if os.path.exists(HISTORY_FILE):
-        try:
-            with open(HISTORY_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception as e:
-            logger.error(f"Error loading history.json: {e}")
-            return []
-    return []
-
-def save_history(history: List[Dict[str, Any]]):
+    db = SessionLocal()
     try:
-        with open(HISTORY_FILE, "w", encoding="utf-8") as f:
-            json.dump(history, f, indent=2, ensure_ascii=False)
-    except Exception as e:
-        logger.error(f"Error saving history.json: {e}")
+        entries = db.query(History).order_by(History.timestamp.desc()).all()
+        return [e.to_dict() for e in entries]
+    finally:
+        db.close()
 
 def add_history_entry(user_id: str, username: str, session_id: str, excel_path: str, usn_count: int, usn_range_summary: str) -> Dict[str, Any]:
-    history = load_history()
-    file_name = os.path.basename(excel_path)
-    file_size = os.path.getsize(excel_path) if os.path.exists(excel_path) else 0
-    file_size_kb = round(file_size / 1024, 1)
+    db = SessionLocal()
+    try:
+        file_name = os.path.basename(excel_path)
+        file_size = os.path.getsize(excel_path) if os.path.exists(excel_path) else 0
+        file_size_kb = round(file_size / 1024, 1)
 
-    entry = {
-        "id": f"hist_{uuid.uuid4().hex[:8]}",
-        "user_id": user_id,
-        "username": username,
-        "session_id": session_id,
-        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "usn_count": usn_count,
-        "usn_range_summary": usn_range_summary,
-        "excel_file": file_name,
-        "excel_path": excel_path,
-        "file_size_kb": file_size_kb
-    }
-    history.insert(0, entry)
-    save_history(history)
-    logger.info(f"📁 Archived Excel analysis history entry for '{username}': {file_name}")
-    return entry
+        entry = History(
+            id=f"hist_{uuid.uuid4().hex[:8]}",
+            user_id=user_id,
+            username=username,
+            session_id=session_id,
+            timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            usn_count=usn_count,
+            usn_range_summary=usn_range_summary,
+            excel_file=file_name,
+            excel_path=excel_path,
+            file_size_kb=file_size_kb
+        )
+        db.add(entry)
+        db.commit()
+        db.refresh(entry)
+        logger.info(f"📁 Archived Excel analysis history entry for '{username}': {file_name}")
+        return entry.to_dict()
+    except Exception as e:
+        logger.error(f"Error saving history entry to database: {e}")
+        db.rollback()
+        return {}
+    finally:
+        db.close()
+
 
 class UserRegisterRequest(BaseModel):
     username: str
@@ -291,19 +345,12 @@ def register_user(req: UserRegisterRequest, token: str = Query(default=""), auth
 def get_all_users(token: str = Query(default=""), authorization: Optional[str] = Header(None)):
     """Admin endpoint to fetch list of all registered user accounts."""
     get_admin_user(token, authorization)
-    users = load_users()
-    sanitized = []
-    for u in users:
-        sanitized.append({
-            "id": u.get("id"),
-            "username": u.get("username"),
-            "full_name": u.get("full_name"),
-            "email": u.get("email"),
-            "role": u.get("role"),
-            "department": u.get("department", ""),
-            "created_at": u.get("created_at")
-        })
-    return sanitized
+    db = SessionLocal()
+    try:
+        users = db.query(User).order_by(User.created_at.desc()).all()
+        return [u.to_dict() for u in users]
+    finally:
+        db.close()
 
 @app.post("/api/admin/users")
 def admin_create_user(req: UserRegisterRequest, token: str = Query(default=""), authorization: Optional[str] = Header(None)):
@@ -316,108 +363,135 @@ def admin_create_user(req: UserRegisterRequest, token: str = Query(default=""), 
     if not req.password or len(req.password) < 4:
         raise HTTPException(status_code=400, detail="Password must be at least 4 characters.")
     
-    users = load_users()
-    if any(u.get("username", "").strip().lower() == username.lower() for u in users):
-        raise HTTPException(status_code=400, detail=f"Username '{username}' already exists.")
-    
-    hashed_pwd, salt = hash_password(req.password)
-    user_id = f"usr_{uuid.uuid4().hex[:8]}"
-    role = req.role.strip() if req.role and req.role.strip() else "student"
-    department = req.department.strip() if req.department else ""
-    full_name = req.full_name.strip() or username
-    
-    new_user = {
-        "id": user_id,
-        "username": username,
-        "hashed_password": hashed_pwd,
-        "salt": salt,
-        "full_name": full_name,
-        "email": req.email.strip(),
-        "role": role,
-        "department": department,
-        "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    }
-    users.append(new_user)
-    save_users(users)
-    
-    logger.info(f"👑 Admin '{admin_info['username']}' created user account: '{username}' ({role})")
-    
-    return {
-        "status": "success",
-        "message": f"User '{username}' created successfully!",
-        "user": {
-            "id": user_id,
-            "username": username,
-            "role": role,
-            "department": department,
-            "full_name": full_name,
-            "email": new_user["email"]
+    db = SessionLocal()
+    try:
+        existing = db.query(User).filter(User.username.ilike(username)).first()
+        if existing:
+            raise HTTPException(status_code=400, detail=f"Username '{username}' already exists.")
+        
+        hashed_pwd, salt = hash_password(req.password)
+        user_id = f"usr_{uuid.uuid4().hex[:8]}"
+        role = req.role.strip() if req.role and req.role.strip() else "student"
+        department = req.department.strip() if req.department else ""
+        full_name = req.full_name.strip() or username
+        
+        new_user = User(
+            id=user_id,
+            username=username,
+            hashed_password=hashed_pwd,
+            salt=salt,
+            full_name=full_name,
+            email=req.email.strip(),
+            role=role,
+            department=department,
+            created_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        )
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+        
+        logger.info(f"👑 Admin '{admin_info['username']}' created user account: '{username}' ({role})")
+        
+        return {
+            "status": "success",
+            "message": f"User '{username}' created successfully!",
+            "user": new_user.to_dict()
         }
-    }
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creating user in DB: {e}")
+        raise HTTPException(status_code=500, detail="Database error occurred while creating user.")
+    finally:
+        db.close()
 
 @app.put("/api/admin/users/{user_id}")
 def admin_update_user(user_id: str, req: UserUpdateRequest, token: str = Query(default=""), authorization: Optional[str] = Header(None)):
     """Admin endpoint to edit/update a user account's profile, role, or reset password."""
     admin_info = get_admin_user(token, authorization)
-    users = load_users()
-    
-    target_user = next((u for u in users if u.get("id") == user_id), None)
-    if not target_user:
-        raise HTTPException(status_code=404, detail="User account not found.")
-        
-    if req.full_name is not None:
-        target_user["full_name"] = req.full_name.strip()
-    if req.email is not None:
-        target_user["email"] = req.email.strip()
-    if req.department is not None:
-        target_user["department"] = req.department.strip()
-    if req.role is not None:
-        if target_user.get("username", "").strip().lower() == "uttambhise":
-            target_user["role"] = "admin"
-        else:
-            target_user["role"] = req.role.strip() or "student"
+    db = SessionLocal()
+    try:
+        target_user = db.query(User).filter(User.id == user_id).first()
+        if not target_user:
+            raise HTTPException(status_code=404, detail="User account not found.")
             
-    if req.new_password and len(req.new_password.strip()) >= 4:
-        hashed_pwd, salt = hash_password(req.new_password.strip())
-        target_user["hashed_password"] = hashed_pwd
-        target_user["salt"] = salt
-        
-    save_users(users)
-    
-    # Update active token data if user is logged in
-    for tok, info in list(active_tokens.items()):
-        if info.get("user_id") == user_id:
-            info["full_name"] = target_user["full_name"]
-            info["email"] = target_user["email"]
-            info["role"] = target_user["role"]
-            info["department"] = target_user.get("department", "")
+        if req.full_name is not None:
+            target_user.full_name = req.full_name.strip()
+        if req.email is not None:
+            target_user.email = req.email.strip()
+        if req.department is not None:
+            target_user.department = req.department.strip()
+        if req.role is not None:
+            if target_user.username.strip().lower() == "uttambhise":
+                target_user.role = "admin"
+            else:
+                target_user.role = req.role.strip() or "student"
+                
+        if req.new_password and len(req.new_password.strip()) >= 4:
+            hashed_pwd, salt = hash_password(req.new_password.strip())
+            target_user.hashed_password = hashed_pwd
+            target_user.salt = salt
             
-    logger.info(f"👑 Admin '{admin_info['username']}' updated user account: '{target_user['username']}'")
-    return {"status": "success", "message": f"User account '{target_user['username']}' updated successfully.", "user": target_user}
+        db.commit()
+        db.refresh(target_user)
+        updated_dict = target_user.to_dict()
+        
+        # Update active token data if user is logged in
+        for tok, info in list(active_tokens.items()):
+            if info.get("user_id") == user_id:
+                info["full_name"] = updated_dict["full_name"]
+                info["email"] = updated_dict["email"]
+                info["role"] = updated_dict["role"]
+                info["department"] = updated_dict.get("department", "")
+                
+        logger.info(f"👑 Admin '{admin_info['username']}' updated user account: '{target_user.username}'")
+        return {"status": "success", "message": f"User account '{target_user.username}' updated successfully.", "user": updated_dict}
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error updating user in DB: {e}")
+        raise HTTPException(status_code=500, detail="Database error occurred while updating user.")
+    finally:
+        db.close()
 
 @app.delete("/api/admin/users/{user_id}")
 def admin_delete_user(user_id: str, token: str = Query(default=""), authorization: Optional[str] = Header(None)):
     """Admin endpoint to delete/revoke a user account."""
     admin_info = get_admin_user(token, authorization)
-    users = load_users()
-    
-    target_user = next((u for u in users if u.get("id") == user_id), None)
-    if not target_user:
-        raise HTTPException(status_code=404, detail="User account not found.")
-        
-    if target_user.get("username", "").strip().lower() == "uttambhise":
-        raise HTTPException(status_code=400, detail="Cannot delete primary administrator account UttamBhise.")
-        
-    users = [u for u in users if u.get("id") != user_id]
-    save_users(users)
-    
-    # Invalidate active session tokens for deleted user
-    for tok, info in list(active_tokens.items()):
-        if info.get("user_id") == user_id:
-            del active_tokens[tok]
+    db = SessionLocal()
+    try:
+        target_user = db.query(User).filter(User.id == user_id).first()
+        if not target_user:
+            raise HTTPException(status_code=404, detail="User account not found.")
             
-    logger.info(f"👑 Admin '{admin_info['username']}' deleted user account: '{target_user['username']}'")
-    return {"status": "success", "message": f"User account '{target_user['username']}' deleted successfully."}
+        if target_user.username.strip().lower() == "uttambhise":
+            raise HTTPException(status_code=400, detail="Cannot delete primary administrator account UttamBhise.")
+            
+        deleted_username = target_user.username
+        db.delete(target_user)
+        db.commit()
+        
+        # Invalidate active session tokens for deleted user
+        for tok, info in list(active_tokens.items()):
+            if info.get("user_id") == user_id:
+                del active_tokens[tok]
+                
+        logger.info(f"👑 Admin '{admin_info['username']}' deleted user account: '{deleted_username}'")
+        return {"status": "success", "message": f"User account '{deleted_username}' deleted successfully."}
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error deleting user from DB: {e}")
+        raise HTTPException(status_code=500, detail="Database error occurred while deleting user.")
+    finally:
+        db.close()
+
 
 @app.post("/api/auth/login")
 def login_user(req: UserLoginRequest):
@@ -553,28 +627,37 @@ def delete_history_entry(history_id: str, token: str = Query(default=""), author
         raise HTTPException(status_code=401, detail="Authentication required.")
         
     user_info = active_tokens[req_token]
-    history = load_history()
-    entry = next((h for h in history if h.get("id") == history_id), None)
-    
-    if not entry:
-        raise HTTPException(status_code=404, detail="History record not found.")
-        
     clean_username = user_info.get("username", "").strip().lower()
     if clean_username != "uttambhise":
         raise HTTPException(status_code=403, detail="🔒 Access Denied: Deleting result analysis history is restricted to administrator UttamBhise.")
         
-    # Delete excel file from disk if present
-    excel_path = entry.get("excel_path")
-    if excel_path and os.path.exists(excel_path):
-        try:
-            os.remove(excel_path)
-        except Exception as e:
-            logger.warning(f"Could not remove Excel file from disk: {e}")
+    db = SessionLocal()
+    try:
+        entry = db.query(History).filter(History.id == history_id).first()
+        if not entry:
+            raise HTTPException(status_code=404, detail="History record not found.")
             
-    updated_history = [h for h in history if h.get("id") != history_id]
-    save_history(updated_history)
-    
-    return {"status": "success", "message": "Excel analysis history entry deleted."}
+        # Delete excel file from disk if present
+        excel_path = entry.excel_path
+        if excel_path and os.path.exists(excel_path):
+            try:
+                os.remove(excel_path)
+            except Exception as e:
+                logger.warning(f"Could not remove Excel file from disk: {e}")
+                
+        db.delete(entry)
+        db.commit()
+        return {"status": "success", "message": "Excel analysis history entry deleted."}
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error deleting history entry from DB: {e}")
+        raise HTTPException(status_code=500, detail="Database error occurred while deleting history entry.")
+    finally:
+        db.close()
+
 
 
 @app.get("/api/download/{session_id}")

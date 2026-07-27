@@ -14,3 +14,13 @@ services:
         value: 8708b761-cd16-4b79-ba2c-554eb547f017
       - key: DATA_DIR
         value: /app/backend/data
+      - key: DATABASE_URL
+        fromDatabase:
+          name: vtu-db
+          property: connectionString
+
+databases:
+  - name: vtu-db
+    plan: free
+    databaseName: vtudb
+    user: vtudb_user
