@@ -111,29 +111,6 @@ Generates color-coded OpenPyXL Excel reports containing:
 
 ---
 
-## 🔐 Default Credentials
-
-| Role | Username | Default Password | Access Level |
-|---|---|---|---|
-| **System Admin** | `UttamBhise` | `#Uttama207` | Full System & User Management Access |
-| **Demo Admin** | `admin` | `admin123` | Faculty / Administrator Access |
-| **Demo Student** | `student` | `student123` | Student / Viewer Access |
-
----
-
-## 🌐 Deployment on Render
-
-1. **Create Web Service** on [Render.com](https://render.com).
-2. **Connect Repository**: `Uttama786/RESULT-ANALYSIS`.
-3. **Environment Settings**:
-   - **Environment**: Python
-   - **Root Directory**: `backend`
-   - **Build Command**: `pip install -r requirements.txt`
-   - **Start Command**: `python app.py`
-4. **Environment Variables**:
-   - `DATABASE_URL`: Add Render PostgreSQL Connection String (`postgresql://...`).
-
----
 
 ## 🏛️ Institution & Credits
 
