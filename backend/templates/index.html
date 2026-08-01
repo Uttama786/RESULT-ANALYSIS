@@ -1332,9 +1332,16 @@
                                                 {item.usn_range_summary || `${item.usn_count} Students Scraped`}
                                             </td>
                                             <td class="py-3.5 px-4 font-mono text-gray-300">
-                                                <span class="px-2 py-0.5 bg-white/5 border border-white/10 rounded font-bold">
-                                                    {item.file_size_kb ? `${item.file_size_kb} KB` : "Excel File"}
-                                                </span>
+                                                <div class="flex items-center gap-1.5">
+                                                    <span class="px-2 py-0.5 bg-white/5 border border-white/10 rounded font-bold">
+                                                        {item.file_size_kb ? `${item.file_size_kb} KB` : "Excel File"}
+                                                    </span>
+                                                    {item.storage_provider === "cloudinary" ? (
+                                                        <span class="px-1.5 py-0.5 bg-brandCyan/10 border border-brandCyan/20 text-brandCyan text-[10px] font-bold rounded" title="Stored permanently in Cloudinary Cloud">☁️ Cloud</span>
+                                                    ) : (
+                                                        <span class="px-1.5 py-0.5 bg-brandGreen/10 border border-brandGreen/20 text-brandGreen text-[10px] font-bold rounded" title="Stored permanently in Database">💾 Persistent</span>
+                                                    )}
+                                                </div>
                                             </td>
                                             <td class="py-3.5 px-4 text-center flex items-center justify-center gap-2">
                                                 <a 
@@ -1738,10 +1745,12 @@
 
         // Retro glowing terminal log console
         const TerminalConsole = ({ logs }) => {
-            const bottomRef = useRef(null);
+            const consoleBodyRef = useRef(null);
 
             useEffect(() => {
-                bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+                if (consoleBodyRef.current) {
+                    consoleBodyRef.current.scrollTop = consoleBodyRef.current.scrollHeight;
+                }
             }, [logs]);
 
             return (
@@ -1755,7 +1764,7 @@
                         <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest font-mono">Console Logs</span>
                         <span class="text-[10px] font-semibold text-brandPrimary/80 font-mono">v1.0.0</span>
                     </div>
-                    <div class="flex-1 p-4 bg-black/30 overflow-y-auto font-mono text-xs text-brandCyan/90 leading-relaxed scrollbar-thin">
+                    <div ref={consoleBodyRef} class="flex-1 p-4 bg-black/30 overflow-y-auto font-mono text-xs text-brandCyan/90 leading-relaxed scrollbar-thin">
                         {logs.map((log, index) => (
                             <div key={index} class="mb-1.5 flex gap-2">
                                 <span class="text-brandSecondary font-bold select-none">&gt;</span>
@@ -1765,7 +1774,6 @@
                         {logs.length === 0 && (
                             <div class="text-gray-500 italic text-center py-12">Scraping log activity is currently idle. Press Crawl to initiate.</div>
                         )}
-                        <div ref={bottomRef} />
                     </div>
                 </div>
             );
@@ -1885,15 +1893,21 @@
 
                 const isDark = appTheme === "dark";
 
+                const passedCount = summary.passed_count || 0;
+                const failedCount = summary.failed_count || 0;
+                const absentCount = summary.absent_count || 0;
+                const totalReg = summary.total_registered || summary.total_students || 0;
+                const appearedCount = summary.appeared_count ?? (totalReg - absentCount);
+
                 const options = {
-                    series: [summary.passed_count, summary.failed_count],
+                    series: [passedCount, failedCount, absentCount],
                     chart: {
                         type: 'donut',
                         height: 250,
                         background: 'transparent'
                     },
-                    labels: ['Passed', 'Failed'],
-                    colors: ['#10b981', '#f43f5e'],
+                    labels: ['Passed', 'Failed', 'Absent'],
+                    colors: ['#10b981', '#f43f5e', '#eab308'],
                     theme: { mode: isDark ? 'dark' : 'light' },
                     stroke: { show: false },
                     plotOptions: {
@@ -1912,10 +1926,10 @@
                                     },
                                     total: {
                                         show: true,
-                                        label: 'Total',
+                                        label: 'Appeared',
                                         fontFamily: 'Outfit',
                                         color: isDark ? '#9ca3af' : '#64748b',
-                                        formatter: () => summary.total_students
+                                        formatter: () => appearedCount
                                     }
                                 }
                             }
@@ -2033,9 +2047,29 @@
                 }
             }, []);
 
+            // Disable automatic browser scroll restoration and ensure window loads at the top
+            useEffect(() => {
+                if ('scrollRestoration' in window.history) {
+                    window.history.scrollRestoration = 'manual';
+                }
+                window.scrollTo(0, 0);
+            }, []);
+
+            // Scroll to top whenever user authentication state changes
+            useEffect(() => {
+                if (user) {
+                    window.scrollTo(0, 0);
+                    if (document.documentElement) document.documentElement.scrollTop = 0;
+                    if (document.body) document.body.scrollTop = 0;
+                }
+            }, [user]);
+
             const handleAuthSuccess = (userData, token) => {
                 setUser(userData);
                 setLogs(prev => [...prev, `[AUTH] Welcome, ${userData.full_name || userData.username}! Logged in as ${userData.role}.`]);
+                window.scrollTo(0, 0);
+                if (document.documentElement) document.documentElement.scrollTop = 0;
+                if (document.body) document.body.scrollTop = 0;
             };
 
             const handleLogout = async () => {
@@ -2047,6 +2081,7 @@
                 localStorage.removeItem("vtu_auth_user");
                 setUser(null);
                 setLogs(prev => [...prev, `[AUTH] Logged out successfully.`]);
+                window.scrollTo(0, 0);
             };
 
             // Add starting log
@@ -2254,8 +2289,9 @@
                                      student.usn.toLowerCase().includes(searchTerm.toLowerCase());
                 
                 if (statusFilter === "ALL") return matchesSearch;
-                if (statusFilter === "PASS") return matchesSearch && "FAIL" !== student.status;
-                if (statusFilter === "FAIL") return matchesSearch && "FAIL" === student.status;
+                if (statusFilter === "PASS") return matchesSearch && !student.status.includes("FAIL") && !student.status.includes("ABSENT") && student.status !== "AB";
+                if (statusFilter === "FAIL") return matchesSearch && student.status.includes("FAIL");
+                if (statusFilter === "ABSENT") return matchesSearch && (student.status.includes("ABSENT") || student.status === "AB");
                 
                 // Specific class filters
                 return matchesSearch && student.status.includes(statusFilter);
@@ -2647,26 +2683,41 @@
                             </h2>
 
                             {/* KPI metrics row */}
-                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
-                                <div class="glass-panel p-6 rounded-2xl border-l-4 border-brandPrimary shadow-md">
-                                    <p class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Students Searched</p>
-                                    <h4 class="text-3xl font-extrabold text-white">{analysisResults.summary.total_students}</h4>
-                                    <p class="text-[10px] text-gray-500 font-medium mt-1">Processed USN requests</p>
+                            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 mb-8">
+                                <div class="glass-panel p-4 rounded-2xl border-l-4 border-brandPrimary shadow-md">
+                                    <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Total Registered</p>
+                                    <h4 class="text-2xl font-extrabold text-white">{analysisResults.summary.total_registered || analysisResults.summary.total_students}</h4>
+                                    <p class="text-[9px] text-gray-500 font-medium mt-1">Selected USN count</p>
                                 </div>
-                                <div class="glass-panel p-6 rounded-2xl border-l-4 border-brandGreen shadow-md">
-                                    <p class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Total Pass Count</p>
-                                    <h4 class="text-3xl font-extrabold text-brandGreen">{analysisResults.summary.passed_count}</h4>
-                                    <p class="text-[10px] text-brandGreen/80 font-medium mt-1">Cleared with zero backlog</p>
+                                <div class="glass-panel p-4 rounded-2xl border-l-4 border-brandCyan shadow-md">
+                                    <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Appeared</p>
+                                    <h4 class="text-2xl font-extrabold text-brandCyan">{analysisResults.summary.appeared_count ?? (analysisResults.summary.total_students - (analysisResults.summary.absent_count || 0))}</h4>
+                                    <p class="text-[9px] text-brandCyan/80 font-medium mt-1">Attended exams</p>
                                 </div>
-                                <div class="glass-panel p-6 rounded-2xl border-l-4 border-brandRed shadow-md">
-                                    <p class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Remedial Backlogs</p>
-                                    <h4 class="text-3xl font-extrabold text-brandRed">{analysisResults.summary.failed_count}</h4>
-                                    <p class="text-[10px] text-brandRed/80 font-medium mt-1">Failed one or more subjects</p>
+                                <div class="glass-panel p-4 rounded-2xl border-l-4 border-brandGreen shadow-md">
+                                    <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Passed</p>
+                                    <h4 class="text-2xl font-extrabold text-brandGreen">{analysisResults.summary.passed_count}</h4>
+                                    <p class="text-[9px] text-brandGreen/80 font-medium mt-1">Cleared all courses</p>
                                 </div>
-                                <div class="glass-panel p-6 rounded-2xl border-l-4 border-brandCyan shadow-md">
-                                    <p class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Overall Pass Percentage</p>
-                                    <h4 class="text-3xl font-extrabold text-brandCyan">{analysisResults.summary.pass_percentage}%</h4>
-                                    <p class="text-[10px] text-gray-500 font-medium mt-1">Class academic pass rate</p>
+                                <div class="glass-panel p-4 rounded-2xl border-l-4 border-brandRed shadow-md">
+                                    <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Failed</p>
+                                    <h4 class="text-2xl font-extrabold text-brandRed">{analysisResults.summary.failed_count}</h4>
+                                    <p class="text-[9px] text-brandRed/80 font-medium mt-1">Backlog students</p>
+                                </div>
+                                <div class="glass-panel p-4 rounded-2xl border-l-4 border-yellow-500 shadow-md">
+                                    <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Absent</p>
+                                    <h4 class="text-2xl font-extrabold text-yellow-500">{analysisResults.summary.absent_count || 0}</h4>
+                                    <p class="text-[9px] text-yellow-500/80 font-medium mt-1">Did not appear</p>
+                                </div>
+                                <div class="glass-panel p-4 rounded-2xl border-l-4 border-brandGreen shadow-md">
+                                    <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Pass % (Appeared)</p>
+                                    <h4 class="text-2xl font-extrabold text-brandGreen">{analysisResults.summary.pass_percentage}%</h4>
+                                    <p class="text-[9px] text-gray-500 font-medium mt-1">Based on appeared</p>
+                                </div>
+                                <div class="glass-panel p-4 rounded-2xl border-l-4 border-brandRed shadow-md">
+                                    <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Fail % (Appeared)</p>
+                                    <h4 class="text-2xl font-extrabold text-brandRed">{analysisResults.summary.fail_percentage ?? (analysisResults.summary.appeared_count ? ((analysisResults.summary.failed_count / analysisResults.summary.appeared_count) * 100).toFixed(2) : "0.00")}%</h4>
+                                    <p class="text-[9px] text-gray-500 font-medium mt-1">Based on appeared</p>
                                 </div>
                             </div>
 
@@ -2761,6 +2812,7 @@
                                                 <option value="ALL">All Records</option>
                                                 <option value="PASS">Cleared Class</option>
                                                 <option value="FAIL">Backlog Class</option>
+                                                <option value="ABSENT">Absent Class</option>
                                                 <option value="DISTINCTION">Distinction Only</option>
                                                 <option value="FIRST CLASS">First Class Only</option>
                                             </select>
@@ -2783,11 +2835,13 @@
                                             </thead>
                                             <tbody>
                                                 {filteredResults.map((student, idx) => {
-                                                    const isFail = "FAIL" === student.status;
+                                                    const isFail = student.status.includes("FAIL");
+                                                    const isAbsent = student.status.includes("ABSENT") || student.status === "AB";
                                                     const isDistinction = student.status.includes("DISTINCTION");
                                                     
                                                     let statusBadge = "bg-brandGreen/10 border-brandGreen/20 text-brandGreen";
                                                     if (isFail) statusBadge = "bg-brandRed/10 border-brandRed/20 text-brandRed";
+                                                    else if (isAbsent) statusBadge = "bg-yellow-500/10 border-yellow-500/20 text-yellow-500";
                                                     else if (isDistinction) statusBadge = "bg-brandCyan/10 border-brandCyan/20 text-brandCyan text-glow";
 
                                                     return (
@@ -2821,28 +2875,38 @@
                                                     <th class="py-3 px-4">Subject Code</th>
                                                     <th class="py-3 px-4">Subject Name</th>
                                                     <th class="py-3 px-4 text-right">Registered</th>
+                                                    <th class="py-3 px-4 text-right">Appeared</th>
                                                     <th class="py-3 px-4 text-right">Passed</th>
                                                     <th class="py-3 px-4 text-right">Failed</th>
+                                                    <th class="py-3 px-4 text-right">Absent</th>
                                                     <th class="py-3 px-4 text-right">Pass Rate (%)</th>
+                                                    <th class="py-3 px-4 text-right">Fail Rate (%)</th>
                                                     <th class="py-3 px-4 text-right">Average Score</th>
                                                     <th class="py-3 px-4 text-right">Highest Score</th>
                                                     <th class="py-3 px-4 text-center">Subject Topper</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {analysisResults.subject_analysis.map((sub, idx) => (
-                                                    <tr key={idx} class="border-b border-white/5 hover:bg-white/5 transition-all whitespace-nowrap">
-                                                        <td class="py-3.5 px-4 font-mono font-bold text-brandPrimary">{sub.code}</td>
-                                                        <td class="py-3.5 px-4 font-bold text-white uppercase">{sub.name}</td>
-                                                        <td class="py-3.5 px-4 text-right font-semibold text-gray-300">{sub.registered}</td>
-                                                        <td class="py-3.5 px-4 text-right text-brandGreen font-bold">{sub.passed}</td>
-                                                        <td class="py-3.5 px-4 text-right text-brandRed font-bold">{sub.failed}</td>
-                                                        <td class="py-3.5 px-4 text-right font-bold text-brandCyan font-mono">{sub.pass_percentage}%</td>
-                                                        <td class="py-3.5 px-4 text-right text-gray-300 font-semibold">{sub.average_marks}</td>
-                                                        <td class="py-3.5 px-4 text-right text-brandSecondary font-bold">{sub.highest_marks}</td>
-                                                        <td class="py-3.5 px-4 text-center font-mono font-bold text-brandOrange">{sub.highest_usn}</td>
-                                                    </tr>
-                                                ))}
+                                                {analysisResults.subject_analysis.map((sub, idx) => {
+                                                    const appeared = sub.appeared ?? (sub.registered - (sub.absent || 0));
+                                                    const failPct = sub.fail_percentage ?? (appeared > 0 ? ((sub.failed / appeared) * 100).toFixed(2) : "0.00");
+                                                    return (
+                                                        <tr key={idx} class="border-b border-white/5 hover:bg-white/5 transition-all whitespace-nowrap">
+                                                            <td class="py-3.5 px-4 font-mono font-bold text-brandPrimary">{sub.code}</td>
+                                                            <td class="py-3.5 px-4 font-bold text-white uppercase">{sub.name}</td>
+                                                            <td class="py-3.5 px-4 text-right font-semibold text-gray-300">{sub.registered}</td>
+                                                            <td class="py-3.5 px-4 text-right font-semibold text-brandCyan">{appeared}</td>
+                                                            <td class="py-3.5 px-4 text-right text-brandGreen font-bold">{sub.passed}</td>
+                                                            <td class="py-3.5 px-4 text-right text-brandRed font-bold">{sub.failed}</td>
+                                                            <td class="py-3.5 px-4 text-right text-yellow-500 font-bold">{sub.absent || 0}</td>
+                                                            <td class="py-3.5 px-4 text-right font-bold text-brandGreen font-mono">{sub.pass_percentage}%</td>
+                                                            <td class="py-3.5 px-4 text-right font-bold text-brandRed font-mono">{failPct}%</td>
+                                                            <td class="py-3.5 px-4 text-right text-gray-300 font-semibold">{sub.average_marks}</td>
+                                                            <td class="py-3.5 px-4 text-right text-brandSecondary font-bold">{sub.highest_marks}</td>
+                                                            <td class="py-3.5 px-4 text-center font-mono font-bold text-brandOrange">{sub.highest_usn}</td>
+                                                        </tr>
+                                                    );
+                                                })}
                                             </tbody>
                                         </table>
                                     )}

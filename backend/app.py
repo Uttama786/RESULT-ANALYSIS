@@ -5,15 +5,16 @@ import json
 import secrets
 import hashlib
 import logging
+import requests
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Header, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from pydantic import BaseModel
 
 from config import DATA_DIR, EXPORTS_DIR, TEMPLATES_DIR
-from database import Base, engine, SessionLocal
+from database import Base, engine, SessionLocal, upgrade_db_schema
 from models import User, History
 from scraper import VTUScraper, solve_captcha_ocr_base64
 from analyzer import ResultAnalyzer
@@ -22,8 +23,9 @@ from analyzer import ResultAnalyzer
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-# Initialize database tables (creates tables if they do not exist)
+# Initialize database tables and auto-migrate missing columns
 Base.metadata.create_all(bind=engine)
+upgrade_db_schema()
 
 app = FastAPI(
     title="VTU Result Scraper & Analysis Tool",
@@ -174,12 +176,101 @@ def load_history() -> List[Dict[str, Any]]:
     finally:
         db.close()
 
+def upload_to_persistent_storage(excel_path: str, session_id: str) -> tuple:
+    """
+    Uploads generated Excel report to Cloud storage (Cloudinary/S3 if configured)
+    and loads binary bytes for persistent database BLOB storage.
+    Returns: (excel_url, excel_bytes, storage_provider)
+    """
+    excel_bytes = None
+    excel_url = ""
+    storage_provider = "db"
+
+    if os.path.exists(excel_path):
+        try:
+            with open(excel_path, "rb") as f:
+                excel_bytes = f.read()
+        except Exception as e:
+            logger.error(f"Error reading Excel file bytes for session '{session_id}': {e}")
+
+    # Check Cloudinary configuration in environment variables
+    cloudinary_url = os.getenv("CLOUDINARY_URL", "").strip()
+    cloudinary_name = os.getenv("CLOUDINARY_CLOUD_NAME", "").strip()
+    cloudinary_preset = os.getenv("CLOUDINARY_UPLOAD_PRESET", "").strip()
+
+    if (cloudinary_url or (cloudinary_name and cloudinary_preset)) and excel_bytes:
+        try:
+            logger.info(f"☁️ Uploading Excel report to Cloudinary for session: {session_id}")
+            try:
+                import cloudinary
+                import cloudinary.uploader
+                if cloudinary_url:
+                    cloudinary.config(cloudinary_url=cloudinary_url)
+                res = cloudinary.uploader.upload(
+                    excel_path,
+                    resource_type="raw",
+                    public_id=f"vtu_results/VTU_Results_{session_id}"
+                )
+                excel_url = res.get("secure_url", "")
+                if excel_url:
+                    storage_provider = "cloudinary"
+                    logger.info(f"✅ Successfully uploaded Excel report to Cloudinary: {excel_url}")
+            except Exception as sdk_err:
+                logger.warning(f"Cloudinary SDK upload fallback to HTTP API: {sdk_err}")
+                if cloudinary_name and cloudinary_preset:
+                    upload_endpoint = f"https://api.cloudinary.com/v1_1/{cloudinary_name}/raw/upload"
+                    files = {"file": (f"VTU_Results_{session_id}.xlsx", excel_bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")}
+                    data = {"upload_preset": cloudinary_preset}
+                    resp = requests.post(upload_endpoint, files=files, data=data, timeout=15)
+                    if resp.status_code == 200:
+                        res_json = resp.json()
+                        excel_url = res_json.get("secure_url", "")
+                        storage_provider = "cloudinary"
+                        logger.info(f"✅ Successfully uploaded Excel report to Cloudinary via REST: {excel_url}")
+        except Exception as err:
+            logger.error(f"⚠️ Cloud storage upload error: {err}. Defaulting to Database BLOB storage.")
+
+    return excel_url, excel_bytes, storage_provider
+
+
+def migrate_excel_files_to_db():
+    """Reads existing local Excel report files from disk into persistent DB storage for legacy history records."""
+    db = SessionLocal()
+    try:
+        entries = db.query(History).filter(History.excel_data == None).all()
+        migrated_count = 0
+        for entry in entries:
+            path = entry.excel_path
+            if not path or not os.path.exists(path):
+                path = os.path.join(EXPORTS_DIR, entry.excel_file or "")
+            if path and os.path.exists(path):
+                try:
+                    with open(path, "rb") as f:
+                        entry.excel_data = f.read()
+                    migrated_count += 1
+                except Exception as e:
+                    logger.warning(f"Could not load legacy Excel file '{path}' into DB: {e}")
+        if migrated_count > 0:
+            db.commit()
+            logger.info(f"💾 Backed up {migrated_count} existing Excel reports into persistent database storage.")
+    except Exception as e:
+        logger.error(f"Error backing up legacy Excel files to DB: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+migrate_excel_files_to_db()
+
+
 def add_history_entry(user_id: str, username: str, session_id: str, excel_path: str, usn_count: int, usn_range_summary: str) -> Dict[str, Any]:
     db = SessionLocal()
     try:
         file_name = os.path.basename(excel_path)
         file_size = os.path.getsize(excel_path) if os.path.exists(excel_path) else 0
         file_size_kb = round(file_size / 1024, 1)
+
+        # Upload to persistent cloud storage & load binary bytes for DB BLOB backup
+        excel_url, excel_bytes, storage_provider = upload_to_persistent_storage(excel_path, session_id)
 
         entry = History(
             id=f"hist_{uuid.uuid4().hex[:8]}",
@@ -191,12 +282,15 @@ def add_history_entry(user_id: str, username: str, session_id: str, excel_path: 
             usn_range_summary=usn_range_summary,
             excel_file=file_name,
             excel_path=excel_path,
+            excel_url=excel_url,
+            storage_provider=storage_provider,
+            excel_data=excel_bytes,
             file_size_kb=file_size_kb
         )
         db.add(entry)
         db.commit()
         db.refresh(entry)
-        logger.info(f"📁 Archived Excel analysis history entry for '{username}': {file_name}")
+        logger.info(f"📁 Archived Excel analysis history entry for '{username}': {file_name} (Provider: {storage_provider}, Size: {file_size_kb} KB)")
         return entry.to_dict()
     except Exception as e:
         logger.error(f"Error saving history entry to database: {e}")
@@ -584,7 +678,7 @@ def get_user_history(token: str = Query(default=""), authorization: Optional[str
 
 @app.get("/api/history/download/{history_id}")
 def download_history_excel(history_id: str, token: str = Query(default=""), authorization: Optional[str] = Header(None)):
-    """Downloads a specific historical Excel report (.xlsx)."""
+    """Downloads a specific historical Excel report (.xlsx) permanently from persistent storage."""
     req_token = token.strip()
     if not req_token and authorization and authorization.startswith("Bearer "):
         req_token = authorization.replace("Bearer ", "").strip()
@@ -593,28 +687,47 @@ def download_history_excel(history_id: str, token: str = Query(default=""), auth
         raise HTTPException(status_code=401, detail="Authentication required.")
         
     user_info = active_tokens[req_token]
-    history = load_history()
-    entry = next((h for h in history if h.get("id") == history_id), None)
-    
-    if not entry:
-        raise HTTPException(status_code=404, detail="History record not found.")
-        
-    if user_info.get("role") != "admin" and entry.get("user_id") != user_info.get("user_id"):
-        raise HTTPException(status_code=403, detail="Access denied.")
-        
-    excel_path = entry.get("excel_path")
-    if not excel_path or not os.path.exists(excel_path):
-        excel_path = os.path.join(EXPORTS_DIR, entry.get("excel_file", ""))
-        
-    if not os.path.exists(excel_path):
-        raise HTTPException(status_code=404, detail="Excel report file does not exist on server.")
-        
-    filename = f"VTU_Analysis_Report_{entry['session_id'][:8]}.xlsx"
-    return FileResponse(
-        path=excel_path,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        filename=filename
-    )
+    db = SessionLocal()
+    try:
+        entry = db.query(History).filter(History.id == history_id).first()
+        if not entry:
+            raise HTTPException(status_code=404, detail="History record not found in database.")
+            
+        if user_info.get("role") != "admin" and entry.user_id != user_info.get("user_id"):
+            raise HTTPException(status_code=403, detail="Access denied.")
+            
+        filename = f"VTU_Analysis_Report_{entry.session_id[:8]}.xlsx" if entry.session_id else (entry.excel_file or "VTU_Analysis_Report.xlsx")
+
+        # 1. Redirect if Cloud URL is available
+        if entry.excel_url and entry.excel_url.startswith("http"):
+            logger.info(f"☁️ Redirecting history download to cloud URL: {entry.excel_url}")
+            return Response(status_code=307, headers={"Location": entry.excel_url})
+
+        # 2. Serve from local disk if file is present
+        excel_path = entry.excel_path
+        if not excel_path or not os.path.exists(excel_path):
+            excel_path = os.path.join(EXPORTS_DIR, entry.excel_file or "")
+
+        if excel_path and os.path.exists(excel_path):
+            return FileResponse(
+                path=excel_path,
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                filename=filename
+            )
+
+        # 3. Serve binary BLOB stored persistently in database (Survives Render restarts)
+        if entry.excel_data:
+            logger.info(f"📥 Serving persistent database Excel BLOB for history record '{history_id}'")
+            return Response(
+                content=entry.excel_data,
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+            )
+
+        raise HTTPException(status_code=404, detail="Excel report file does not exist on server or persistent storage.")
+    finally:
+        db.close()
+
 
 @app.delete("/api/history/{history_id}")
 def delete_history_entry(history_id: str, token: str = Query(default=""), authorization: Optional[str] = Header(None)):
@@ -662,20 +775,48 @@ def delete_history_entry(history_id: str, token: str = Query(default=""), author
 
 @app.get("/api/download/{session_id}")
 def download_excel(session_id: str):
-    """Serves the generated Excel sheet for download."""
-    if session_id not in session_registry:
-        raise HTTPException(status_code=404, detail="Session ID not found or expired.")
-        
-    file_path = session_registry[session_id]["file_path"]
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="Excel file does not exist on disk.")
-        
+    """Serves the generated Excel sheet for download, with persistent DB fallback if local disk was cleared by server restart."""
     filename = f"VTU_Result_Analysis_{session_id[:8]}.xlsx"
-    return FileResponse(
-        path=file_path,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        filename=filename
-    )
+
+    # 1. Check in-memory registry for local file
+    if session_id in session_registry:
+        file_path = session_registry[session_id].get("file_path")
+        if file_path and os.path.exists(file_path):
+            return FileResponse(
+                path=file_path,
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                filename=filename
+            )
+
+    # 2. Check local disk EXPORTS_DIR
+    local_file = os.path.join(EXPORTS_DIR, f"VTU_Results_{session_id}.xlsx")
+    if os.path.exists(local_file):
+        return FileResponse(
+            path=local_file,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            filename=filename
+        )
+
+    # 3. Persistent Database Storage Fallback (Survives Render restarts / sleeps)
+    db = SessionLocal()
+    try:
+        entry = db.query(History).filter(History.session_id == session_id).first()
+        if entry:
+            if entry.excel_url and entry.excel_url.startswith("http"):
+                logger.info(f"☁️ Redirecting session download to cloud URL: {entry.excel_url}")
+                return Response(status_code=307, headers={"Location": entry.excel_url})
+
+            if entry.excel_data:
+                logger.info(f"📥 Serving persistent database Excel BLOB for session '{session_id}'")
+                return Response(
+                    content=entry.excel_data,
+                    media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+                )
+    finally:
+        db.close()
+
+    raise HTTPException(status_code=404, detail="Excel report file not found on server or persistent storage.")
 
 @app.websocket("/ws/scrape/{session_id}")
 async def websocket_scrape(websocket: WebSocket, session_id: str):

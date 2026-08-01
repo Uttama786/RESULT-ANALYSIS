@@ -1111,20 +1111,17 @@ class VTUScraper:
                     failed_any = True
                 elif re.search(r"\b(A|AB|ABSENT)\b", res_text):
                     result_char = "A"
-                    failed_any = True
                 elif re.search(r"\b(W|WITHHELD)\b", res_text):
                     result_char = "W"
-                    failed_any = True
                 elif re.search(r"\b(X|NE|NOT\s*ELIGIBLE)\b", res_text):
                     result_char = "NE"
-                    failed_any = True
                 elif re.search(r"\b(NA|NOT\s*APPLICABLE)\b", res_text):
                     result_char = "NA"
                 elif res_text in ["P", "PASS"]:
                     result_char = "P"
                 else:
                     result_char = res_text if res_text else "P"
-                    if result_char != "P":
+                    if result_char == "F":
                         failed_any = True
 
                 subjects.append({
@@ -1152,7 +1149,11 @@ class VTUScraper:
         # ----------------------------------------------------------------
         # 5. Determine overall result class
         # ----------------------------------------------------------------
-        if failed_any:
+        all_absent = len(subjects) > 0 and all(s["result"] in ["A", "AB", "ABSENT"] for s in subjects)
+
+        if all_absent:
+            status = "ABSENT"
+        elif failed_any:
             status = "FAIL"
         elif percentage >= 70:
             status = "FIRST CLASS WITH DISTINCTION"

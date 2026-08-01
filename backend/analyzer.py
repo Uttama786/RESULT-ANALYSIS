@@ -23,56 +23,118 @@ def is_valid_subject_code(code: str, name: str = "") -> bool:
         return False
     return True
 
+def calculate_pass_fail_stats(total_registered: int, absent_count: int, failed_count: int, passed_count: int = None) -> dict:
+    """
+    Standard VTU calculation logic using the 'Appeared Students' method.
+    Total Registered = Appeared + Absent
+    Appeared = Total Registered - Absent
+    Passed = Appeared - Failed (if passed_count is None)
+    Pass Percentage = (Passed / Appeared) * 100
+    Fail Percentage = (Failed / Appeared) * 100
+    """
+    total_registered = max(0, int(total_registered))
+    absent_count = max(0, int(absent_count))
+    failed_count = max(0, int(failed_count))
+
+    appeared_count = max(0, total_registered - absent_count)
+
+    if passed_count is None:
+        passed_count = max(0, appeared_count - failed_count)
+    else:
+        passed_count = max(0, int(passed_count))
+
+    pass_percentage = round((passed_count / appeared_count) * 100, 2) if appeared_count > 0 else 0.0
+    fail_percentage = round((failed_count / appeared_count) * 100, 2) if appeared_count > 0 else 0.0
+
+    return {
+        "total_registered": total_registered,
+        "total_students": total_registered,  # alias for backward compatibility
+        "absent_count": absent_count,
+        "appeared_count": appeared_count,
+        "passed_count": passed_count,
+        "failed_count": failed_count,
+        "pass_percentage": pass_percentage,
+        "fail_percentage": fail_percentage
+    }
+
 class ResultAnalyzer:
     def __init__(self, student_records: list):
         self.records = student_records
 
     def analyze(self) -> dict:
-        """Performs analytical summaries on student records."""
+        """Performs analytical summaries on student records using the Appeared Students method."""
         if not self.records:
             return {}
-            
+
         total_students = len(self.records)
-        
-        # Calculate pass/fail counts
-        passed_records = [r for r in self.records if "FAIL" not in r["status"].upper()]
-        failed_records = [r for r in self.records if "FAIL" in r["status"].upper()]
-        
-        pass_count = len(passed_records)
-        fail_count = len(failed_records)
-        pass_percentage = round((pass_count / total_students) * 100, 2) if total_students > 0 else 0.0
-        
-        # Identify Toppers
-        toppers = sorted(self.records, key=lambda r: r["total_marks"], reverse=True)
+
+        # Categorize records into Absent, Failed, and Passed
+        absent_records = []
+        failed_records = []
+        passed_records = []
+
+        for r in self.records:
+            status_u = str(r.get("status", "")).strip().upper()
+            sub_results = [
+                str(s.get("result", "")).strip().upper()
+                for s in r.get("subjects", [])
+                if is_valid_subject_code(s.get("code", ""), s.get("name", ""))
+            ]
+
+            is_absent = (status_u in ["ABSENT", "AB", "A"]) or (
+                len(sub_results) > 0 and all(res in ["A", "AB", "ABSENT"] for res in sub_results)
+            )
+
+            if is_absent:
+                absent_records.append(r)
+            else:
+                has_fail_sub = any(res in ["F", "FAIL"] for res in sub_results)
+                if "FAIL" in status_u or has_fail_sub:
+                    failed_records.append(r)
+                else:
+                    passed_records.append(r)
+
+        summary_stats = calculate_pass_fail_stats(
+            total_registered=total_students,
+            absent_count=len(absent_records),
+            failed_count=len(failed_records),
+            passed_count=len(passed_records)
+        )
+
+        # Identify Toppers (excluding completely absent students with 0 marks if appropriate, but reversed sort by total_marks works)
+        toppers = sorted(self.records, key=lambda r: r.get("total_marks", 0), reverse=True)
         toppers_list = [{
             "rank": i + 1,
             "usn": t["usn"],
             "name": t["name"],
-            "total_marks": t["total_marks"],
-            "max_marks": t["max_marks"],
-            "percentage": t["percentage"],
+            "total_marks": t.get("total_marks", 0),
+            "max_marks": t.get("max_marks", 0),
+            "percentage": t.get("percentage", 0.0),
             "status": t["status"]
         } for i, t in enumerate(toppers[:10])]  # Top 10
-        
-        # Identify Failed Students
+
+        # Identify Failed Students (excluding AB students)
         failed_list = [{
             "usn": f["usn"],
             "name": f["name"],
-            "total_marks": f["total_marks"],
-            "percentage": f["percentage"],
-            "failed_subjects": [sub["code"] for sub in f["subjects"] if sub["result"] == "F" and is_valid_subject_code(sub["code"], sub.get("name", ""))]
+            "total_marks": f.get("total_marks", 0),
+            "percentage": f.get("percentage", 0.0),
+            "failed_subjects": [
+                sub["code"] for sub in f.get("subjects", [])
+                if sub.get("result") in ["F", "FAIL"] and is_valid_subject_code(sub["code"], sub.get("name", ""))
+            ]
         } for f in failed_records]
-        
+
         # Subject-wise analysis
         subject_data = {}
         for r in self.records:
-            for sub in r["subjects"]:
-                code = sub["code"]
-                name = sub["name"]
-                
+            for sub in r.get("subjects", []):
+                code = sub.get("code", "")
+                name = sub.get("name", "")
+
                 if not is_valid_subject_code(code, name):
                     continue
-                    
+
                 if code not in subject_data:
                     subject_data[code] = {
                         "code": code,
@@ -80,49 +142,61 @@ class ResultAnalyzer:
                         "registered": 0,
                         "passed": 0,
                         "failed": 0,
+                        "absent": 0,
                         "total_marks_sum": 0,
                         "highest_marks": -1,
                         "highest_usn": ""
                     }
-                    
+
                 s_info = subject_data[code]
                 s_info["registered"] += 1
-                
-                if sub["result"] == "P":
+
+                res_u = str(sub.get("result", "")).strip().upper()
+                if res_u in ["A", "AB", "ABSENT"]:
+                    s_info["absent"] += 1
+                elif res_u in ["F", "FAIL"]:
+                    s_info["failed"] += 1
+                elif res_u in ["P", "PASS"]:
                     s_info["passed"] += 1
                 else:
-                    s_info["failed"] += 1
-                    
-                s_info["total_marks_sum"] += sub["total"]
-                
-                if sub["total"] > s_info["highest_marks"]:
-                    s_info["highest_marks"] = sub["total"]
-                    s_info["highest_usn"] = r["usn"]
-                    
+                    s_info["passed"] += 1
+
+                tot_m = sub.get("total", 0)
+                s_info["total_marks_sum"] += tot_m
+
+                if tot_m > s_info["highest_marks"]:
+                    s_info["highest_marks"] = tot_m
+                    s_info["highest_usn"] = r.get("usn", "")
+
         subject_analysis_list = []
         for code, info in subject_data.items():
-            avg_marks = round(info["total_marks_sum"] / info["registered"], 2) if info["registered"] > 0 else 0.0
-            pass_rate = round((info["passed"] / info["registered"]) * 100, 2) if info["registered"] > 0 else 0.0
-            
+            s_stats = calculate_pass_fail_stats(
+                total_registered=info["registered"],
+                absent_count=info["absent"],
+                failed_count=info["failed"],
+                passed_count=info["passed"]
+            )
+
+            appeared = s_stats["appeared_count"]
+            avg_marks = round(info["total_marks_sum"] / appeared, 2) if appeared > 0 else 0.0
+
             subject_analysis_list.append({
                 "code": info["code"],
                 "name": info["name"],
                 "registered": info["registered"],
+                "appeared": s_stats["appeared_count"],
                 "passed": info["passed"],
                 "failed": info["failed"],
-                "pass_percentage": pass_rate,
+                "absent": info["absent"],
+                "pass_percentage": s_stats["pass_percentage"],
+                "fail_percentage": s_stats["fail_percentage"],
                 "average_marks": avg_marks,
                 "highest_marks": info["highest_marks"],
                 "highest_usn": info["highest_usn"]
             })
-            
+
         return {
-            "summary": {
-                "total_students": total_students,
-                "passed_count": pass_count,
-                "failed_count": fail_count,
-                "pass_percentage": pass_percentage
-            },
+            "summary": summary_stats,
             "toppers": toppers_list,
             "failed_students": failed_list,
             "subject_analysis": subject_analysis_list
@@ -493,9 +567,12 @@ class ResultAnalyzer:
             "Subject Code": s["code"],
             "Subject Name": s["name"],
             "Students Registered": s["registered"],
+            "Appeared": s.get("appeared", s["registered"] - s.get("absent", 0)),
             "Passed": s["passed"],
             "Failed": s["failed"],
-            "Pass Percentage (%)": s["pass_percentage"]
+            "Absent": s.get("absent", 0),
+            "Pass Percentage (%)": s["pass_percentage"],
+            "Fail Percentage (%)": s.get("fail_percentage", 0.0)
         } for s in analysis["subject_analysis"]])
         
         # Sheet 3: Standings (Toppers & Fails)
@@ -653,10 +730,13 @@ class ResultAnalyzer:
         stats_ws[f"{col_let1}1"].alignment = Alignment(horizontal="center", vertical="center")
         
         stats_items = [
-            ("Total Students", summary["total_students"]),
+            ("Total Registered", summary["total_students"]),
+            ("Appeared Students", summary.get("appeared_count", summary["total_students"] - summary.get("absent_count", 0))),
             ("Passed Students", summary["passed_count"]),
             ("Failed Students", summary["failed_count"]),
-            ("Batch Pass %", f"{summary['pass_percentage']}%")
+            ("Absent Students", summary.get("absent_count", 0)),
+            ("Batch Pass %", f"{summary['pass_percentage']}%"),
+            ("Batch Fail %", f"{summary.get('fail_percentage', 0.0)}%")
         ]
         
         for i, (label, value) in enumerate(stats_items):

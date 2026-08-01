@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, Float
+from sqlalchemy import Column, String, Integer, Float, LargeBinary
 from database import Base
 
 class User(Base):
@@ -42,6 +42,9 @@ class History(Base):
     usn_range_summary = Column(String, default="")
     excel_file = Column(String, default="")
     excel_path = Column(String, default="")
+    excel_url = Column(String, default="")
+    storage_provider = Column(String, default="db")
+    excel_data = Column(LargeBinary, nullable=True)
     file_size_kb = Column(Float, default=0.0)
 
     def to_dict(self) -> dict:
@@ -55,5 +58,8 @@ class History(Base):
             "usn_range_summary": self.usn_range_summary,
             "excel_file": self.excel_file,
             "excel_path": self.excel_path,
+            "excel_url": self.excel_url,
+            "storage_provider": self.storage_provider,
+            "has_persistent_storage": bool(self.excel_data is not None or self.excel_url),
             "file_size_kb": self.file_size_kb
         }

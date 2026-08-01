@@ -29,3 +29,26 @@ def get_db():
         yield db
     finally:
         db.close()
+
+def upgrade_db_schema():
+    """Dynamically migrates existing database tables to add missing persistent storage columns."""
+    try:
+        from sqlalchemy import inspect, text
+        inspector = inspect(engine)
+        if "history" in inspector.get_table_names():
+            columns = [c["name"] for c in inspector.get_columns("history")]
+            is_sqlite = SQLALCHEMY_DATABASE_URL.startswith("sqlite")
+            blob_type = "BLOB" if is_sqlite else "BYTEA"
+
+            with engine.begin() as conn:
+                if "excel_data" not in columns:
+                    logger.info(f"🛠️ Migrating database schema: Adding 'excel_data' ({blob_type}) column to 'history' table...")
+                    conn.execute(text(f"ALTER TABLE history ADD COLUMN excel_data {blob_type}"))
+                if "excel_url" not in columns:
+                    logger.info("🛠️ Migrating database schema: Adding 'excel_url' (VARCHAR) column to 'history' table...")
+                    conn.execute(text("ALTER TABLE history ADD COLUMN excel_url VARCHAR(500) DEFAULT ''"))
+                if "storage_provider" not in columns:
+                    logger.info("🛠️ Migrating database schema: Adding 'storage_provider' (VARCHAR) column to 'history' table...")
+                    conn.execute(text("ALTER TABLE history ADD COLUMN storage_provider VARCHAR(50) DEFAULT 'db'"))
+    except Exception as e:
+        logger.warning(f"Note on schema migration: {e}")
