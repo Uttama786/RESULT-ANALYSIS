@@ -6,6 +6,7 @@ import secrets
 import hashlib
 import logging
 import requests
+import threading
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Header, Query
@@ -42,9 +43,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Global dictionary to track session files & active user tokens
+# Global dictionaries and thread-safety locks for session files & active user tokens
 session_registry: Dict[str, Dict[str, Any]] = {}
 active_tokens: Dict[str, Dict[str, Any]] = {}
+
+tokens_lock = threading.Lock()
+registry_lock = threading.Lock()
 
 USERS_FILE = os.path.join(DATA_DIR, "users.json")
 HISTORY_FILE = os.path.join(DATA_DIR, "history.json")
@@ -320,20 +324,45 @@ class UserLoginRequest(BaseModel):
     password: str
 
 
-def cleanup_old_sessions(max_sessions: int = 25):
+def clean_session(session_id: str):
+    """Destroys temporary workspace and cached processing data for a specific session."""
+    if not session_id:
+        return
+    with registry_lock:
+        session_data = session_registry.pop(session_id, None)
+
+    # Clean up session workspace directory
+    session_dir = os.path.join(EXPORTS_DIR, f"session_{session_id}")
+    if os.path.exists(session_dir):
+        try:
+            import shutil
+            shutil.rmtree(session_dir, ignore_errors=True)
+            logger.info(f"🧹 Purged temporary workspace for session: {session_id}")
+        except Exception as e:
+            logger.warning(f"Could not purge session workspace '{session_dir}': {e}")
+
+
+def cleanup_old_sessions(max_sessions: int = 50):
     """Clean up oldest session files and memory entries to prevent disk/memory bloat."""
-    global session_registry
-    if len(session_registry) > max_sessions:
-        keys_to_remove = list(session_registry.keys())[:-max_sessions]
-        for key in keys_to_remove:
-            session_data = session_registry.pop(key, None)
-            if session_data:
-                file_path = session_data.get("file_path")
-                if file_path and os.path.exists(file_path):
-                    try:
-                        os.remove(file_path)
-                    except Exception:
-                        pass
+    with registry_lock:
+        if len(session_registry) > max_sessions:
+            keys_to_remove = list(session_registry.keys())[:-max_sessions]
+            for key in keys_to_remove:
+                session_data = session_registry.pop(key, None)
+                if session_data:
+                    session_dir = session_data.get("session_dir") or os.path.join(EXPORTS_DIR, f"session_{key}")
+                    file_path = session_data.get("file_path")
+                    if session_dir and os.path.exists(session_dir):
+                        try:
+                            import shutil
+                            shutil.rmtree(session_dir, ignore_errors=True)
+                        except Exception:
+                            pass
+                    elif file_path and os.path.exists(file_path):
+                        try:
+                            os.remove(file_path)
+                        except Exception:
+                            pass
 
 def parse_usn_range(start_usn: str, end_usn: str) -> List[str]:
     """Generates a list of USNs from start to end range (inclusive). Handles same prefix or shortened right end (e.g. 120 or 4DM21CS120)."""
@@ -601,17 +630,19 @@ def login_user(req: UserLoginRequest):
     role = user.get("role", "student")
     full_name = user.get("full_name", user["username"])
     
-    active_tokens[token] = {
-        "user_id": user["id"],
-        "username": user["username"],
-        "role": role,
-        "department": user.get("department", ""),
-        "full_name": full_name,
-        "email": user.get("email", ""),
-        "created_at": datetime.now().isoformat()
-    }
+    with tokens_lock:
+        active_tokens[token] = {
+            "token": token,
+            "user_id": user["id"],
+            "username": user["username"],
+            "role": role,
+            "department": user.get("department", ""),
+            "full_name": full_name,
+            "email": user.get("email", ""),
+            "created_at": datetime.now().isoformat()
+        }
     
-    logger.info(f"🔑 User logged in: {user['username']} ({role})")
+    logger.info(f"🔑 User logged in: {user['username']} ({role}) [Token: {token[:8]}...]")
     
     return {
         "status": "success",
@@ -632,25 +663,39 @@ def get_current_user(token: str = Query(default=""), authorization: Optional[str
     if not req_token and authorization and authorization.startswith("Bearer "):
         req_token = authorization.replace("Bearer ", "").strip()
         
-    if req_token and req_token in active_tokens:
-        user_info = active_tokens[req_token]
-        return {
-            "authenticated": True,
-            "user": user_info
-        }
+    if req_token:
+        with tokens_lock:
+            user_info = active_tokens.get(req_token)
+        if user_info:
+            return {
+                "authenticated": True,
+                "user": user_info
+            }
     return {
         "authenticated": False,
         "user": None
     }
 
 @app.post("/api/auth/logout")
-def logout_user(token: str = Query(default=""), authorization: Optional[str] = Header(None)):
+def logout_user(token: str = Query(default=""), session_id: str = Query(default=""), authorization: Optional[str] = Header(None)):
+    """
+    Safely logs out the current user session:
+    1. Invalidates ONLY the user's specific session token.
+    2. Destroys and cleans up that session's temporary workspace directory.
+    3. Preserves permanent database history records intact.
+    """
     req_token = token.strip()
     if not req_token and authorization and authorization.startswith("Bearer "):
         req_token = authorization.replace("Bearer ", "").strip()
         
-    if req_token in active_tokens:
-        del active_tokens[req_token]
+    if req_token:
+        with tokens_lock:
+            active_tokens.pop(req_token, None)
+
+    if session_id:
+        clean_session(session_id.strip())
+
+    return {"status": "success", "message": "Logged out successfully."}
         
 # ============================================
 # EXCEL RESULT ANALYSIS HISTORY API ENDPOINTS
@@ -665,13 +710,15 @@ def get_user_history(token: str = Query(default=""), authorization: Optional[str
         
     history = load_history()
     
-    if req_token and req_token in active_tokens:
-        user_info = active_tokens[req_token]
-        clean_uname = user_info.get("username", "").strip().lower()
-        if user_info.get("role") == "admin" or clean_uname == "uttambhise":
-            return history
-        else:
-            return [h for h in history if h.get("user_id") == user_info.get("user_id") or h.get("username", "").strip().lower() == clean_uname]
+    if req_token:
+        with tokens_lock:
+            user_info = active_tokens.get(req_token)
+        if user_info:
+            clean_uname = user_info.get("username", "").strip().lower()
+            if user_info.get("role") == "admin" or clean_uname == "uttambhise":
+                return history
+            else:
+                return [h for h in history if h.get("user_id") == user_info.get("user_id") or h.get("username", "").strip().lower() == clean_uname]
             
     # Always return history entries if logged out or token refreshed so no file is lost
     return history
@@ -683,10 +730,14 @@ def download_history_excel(history_id: str, token: str = Query(default=""), auth
     if not req_token and authorization and authorization.startswith("Bearer "):
         req_token = authorization.replace("Bearer ", "").strip()
         
-    if not req_token or req_token not in active_tokens:
+    if not req_token:
         raise HTTPException(status_code=401, detail="Authentication required.")
         
-    user_info = active_tokens[req_token]
+    with tokens_lock:
+        user_info = active_tokens.get(req_token)
+        
+    if not user_info:
+        raise HTTPException(status_code=401, detail="Authentication required.")
     db = SessionLocal()
     try:
         entry = db.query(History).filter(History.id == history_id).first()
@@ -729,20 +780,32 @@ def download_history_excel(history_id: str, token: str = Query(default=""), auth
         db.close()
 
 
-@app.delete("/api/history/{history_id}")
-def delete_history_entry(history_id: str, token: str = Query(default=""), authorization: Optional[str] = Header(None)):
-    """Deletes an Excel analysis history record and purges its stored Excel sheet."""
+def get_admin_user(token: str = "", authorization: Optional[str] = None) -> Dict[str, Any]:
+    """Helper to verify if request caller is an authenticated administrator."""
     req_token = token.strip()
     if not req_token and authorization and authorization.startswith("Bearer "):
         req_token = authorization.replace("Bearer ", "").strip()
         
-    if not req_token or req_token not in active_tokens:
-        raise HTTPException(status_code=401, detail="Authentication required.")
+    if not req_token:
+        raise HTTPException(status_code=401, detail="Authentication token required.")
         
-    user_info = active_tokens[req_token]
+    with tokens_lock:
+        user_info = active_tokens.get(req_token)
+        
+    if not user_info:
+        raise HTTPException(status_code=401, detail="Session expired or invalid token.")
+        
     clean_username = user_info.get("username", "").strip().lower()
-    if clean_username != "uttambhise":
-        raise HTTPException(status_code=403, detail="🔒 Access Denied: Deleting result analysis history is restricted to administrator UttamBhise.")
+    if user_info.get("role") != "admin" and clean_username != "uttambhise":
+        raise HTTPException(status_code=403, detail="🔒 Access Denied: Administrator privileges required.")
+        
+    return user_info
+
+@app.delete("/api/history/{history_id}")
+def delete_history_entry(history_id: str, token: str = Query(default=""), authorization: Optional[str] = Header(None)):
+    """Deletes an Excel analysis history record and purges its stored Excel sheet."""
+    # Verify Admin Access
+    get_admin_user(token, authorization)
         
     db = SessionLocal()
     try:
@@ -1065,22 +1128,30 @@ async def websocket_scrape(websocket: WebSocket, session_id: str):
             analyzer = ResultAnalyzer(scraped_results)
             analysis_data = analyzer.analyze()
             
-            # Export to Excel
+            # Export to Excel inside session-isolated workspace directory
+            session_dir = os.path.join(EXPORTS_DIR, f"session_{session_id}")
+            os.makedirs(session_dir, exist_ok=True)
+
             excel_filename = f"VTU_Results_{session_id}.xlsx"
-            excel_path = os.path.join(EXPORTS_DIR, excel_filename)
+            excel_path = os.path.join(session_dir, excel_filename)
             analyzer.export_to_excel(excel_path)
             
-            # Register session in in-memory database
-            session_registry[session_id] = {
-                "file_path": excel_path,
-                "data": scraped_results,
-                "analysis": analysis_data
-            }
+            # Register session in thread-safe in-memory registry
+            with registry_lock:
+                session_registry[session_id] = {
+                    "file_path": excel_path,
+                    "session_dir": session_dir,
+                    "data": scraped_results,
+                    "analysis": analysis_data
+                }
             cleanup_old_sessions()
 
             # Archive analysis history for user
             user_token = config.get("auth_token", "").strip() or config.get("token", "").strip()
-            user_info = active_tokens.get(user_token)
+            user_info = None
+            if user_token:
+                with tokens_lock:
+                    user_info = active_tokens.get(user_token)
             
             user_id = user_info.get("user_id", "usr_admin_uttam") if user_info else "usr_admin_uttam"
             username = user_info.get("username", "UttamBhise") if user_info else "UttamBhise"
