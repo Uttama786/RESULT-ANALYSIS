@@ -23,6 +23,33 @@ def is_valid_subject_code(code: str, name: str = "") -> bool:
         return False
     return True
 
+def format_class_status(status_str: str) -> str:
+    """
+    Converts full class status strings into standard VTU abbreviations:
+    - FIRST CLASS WITH DISTINCTION -> FCD
+    - FIRST CLASS -> FC
+    - SECOND CLASS -> SC
+    - PASS CLASS / PASS -> P
+    - FAIL -> F
+    - ABSENT -> AB
+    """
+    if not status_str:
+        return ""
+    s_upper = str(status_str).strip().upper()
+    if "FIRST CLASS WITH DISTINCTION" in s_upper or "DISTINCTION" in s_upper or s_upper == "FCD":
+        return "FCD"
+    elif "FIRST CLASS" in s_upper or s_upper == "FC":
+        return "FC"
+    elif "SECOND CLASS" in s_upper or s_upper == "SC":
+        return "SC"
+    elif "PASS CLASS" in s_upper or s_upper in ["PASS", "P"]:
+        return "P"
+    elif "FAIL" in s_upper or s_upper == "F":
+        return "F"
+    elif "ABSENT" in s_upper or s_upper in ["AB", "A"]:
+        return "AB"
+    return str(status_str).strip()
+
 def calculate_pass_fail_stats(total_registered: int, absent_count: int, failed_count: int, passed_count: int = None) -> dict:
     """
     Standard VTU calculation logic using the 'Appeared Students' method.
@@ -338,9 +365,9 @@ class ResultAnalyzer:
         title_col_end = 3 + 3 * N + 4 # SL.No, Name, USN + 3*N subjects + TOTAL, PERCENTAGE (%), Remarks, Backlogs
         ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=title_col_end)
         title_cell = ws.cell(row=1, column=1)
-        title_cell.value = f"{semester} Student Result  {batch}"
+        title_cell.value = f"{semester} Student Result"
         title_cell.font = title_font
-        title_cell.alignment = Alignment(horizontal="right", vertical="center")
+        title_cell.alignment = Alignment(horizontal="center", vertical="center")
         
         # Header heights
         ws.row_dimensions[2].height = 22
@@ -365,7 +392,7 @@ class ResultAnalyzer:
         # Merge Subject Marks Header
         sub_marks_col_end = 3 + 3 * N
         ws.merge_cells(start_row=2, start_column=4, end_row=2, end_column=sub_marks_col_end)
-        ws.cell(row=2, column=4, value=f"Subject Marks code wise  {dept} (AFTER REVALUATION)")
+        ws.cell(row=2, column=4, value=f"Subject Marks code wise  {dept}")
         style_cells(2, 4, 2, sub_marks_col_end, header_font, header_fill, Alignment(horizontal="center", vertical="center"), thin_border)
         
         # Merge TOTAL
@@ -424,15 +451,15 @@ class ResultAnalyzer:
             
             # SL.No
             ws.cell(row=row_idx, column=1, value=idx + 1)
-            style_cells(row_idx, 1, row_idx, 1, data_font, zebra_fill if is_zebra else None, Alignment(horizontal="center"), light_border)
+            style_cells(row_idx, 1, row_idx, 1, data_font, zebra_fill if is_zebra else None, Alignment(horizontal="center", vertical="center"), light_border)
             
             # Student Name
             ws.cell(row=row_idx, column=2, value=r["name"].upper())
-            style_cells(row_idx, 2, row_idx, 2, data_font, zebra_fill if is_zebra else None, Alignment(horizontal="left"), light_border)
+            style_cells(row_idx, 2, row_idx, 2, data_font, zebra_fill if is_zebra else None, Alignment(horizontal="left", vertical="center"), light_border)
             
             # USN
             ws.cell(row=row_idx, column=3, value=r["usn"].upper())
-            style_cells(row_idx, 3, row_idx, 3, data_font, zebra_fill if is_zebra else None, Alignment(horizontal="center"), light_border)
+            style_cells(row_idx, 3, row_idx, 3, data_font, zebra_fill if is_zebra else None, Alignment(horizontal="center", vertical="center"), light_border)
             
             # Subjects
             for i, code in enumerate(subject_codes):
@@ -479,44 +506,45 @@ class ResultAnalyzer:
                 
                 c_fill = zebra_fill if is_zebra else None
                 if is_special:
-                    style_cells(row_idx, c_start, row_idx, c_start + 2, Font(name="Segoe UI", size=10, bold=True, color="9C6500"), yellow_fill, Alignment(horizontal="center"), light_border)
+                    style_cells(row_idx, c_start, row_idx, c_start + 2, Font(name="Segoe UI", size=10, bold=True, color="9C6500"), yellow_fill, Alignment(horizontal="center", vertical="center"), light_border)
                 elif failed:
-                    style_cells(row_idx, c_start, row_idx, c_start + 2, Font(name="Segoe UI", size=10, bold=True, color="9C0006"), red_fill, Alignment(horizontal="center"), light_border)
+                    style_cells(row_idx, c_start, row_idx, c_start + 2, Font(name="Segoe UI", size=10, bold=True, color="9C0006"), red_fill, Alignment(horizontal="center", vertical="center"), light_border)
                 else:
-                    style_cells(row_idx, c_start, row_idx, c_start + 2, data_font, c_fill, Alignment(horizontal="center"), light_border)
+                    style_cells(row_idx, c_start, row_idx, c_start + 2, data_font, c_fill, Alignment(horizontal="center", vertical="center"), light_border)
             
             # TOTAL
             ws.cell(row=row_idx, column=tot_col, value=r["total_marks"])
-            style_cells(row_idx, tot_col, row_idx, tot_col, bold_data_font, zebra_fill if is_zebra else None, Alignment(horizontal="center"), light_border)
+            style_cells(row_idx, tot_col, row_idx, tot_col, bold_data_font, zebra_fill if is_zebra else None, Alignment(horizontal="center", vertical="center"), light_border)
 
             # PERCENTAGE (%)
             pct_val = f"{r.get('percentage', 0.0):.2f}%"
             ws.cell(row=row_idx, column=pct_col, value=pct_val)
-            style_cells(row_idx, pct_col, row_idx, pct_col, bold_data_font, zebra_fill if is_zebra else None, Alignment(horizontal="center"), light_border)
+            style_cells(row_idx, pct_col, row_idx, pct_col, bold_data_font, zebra_fill if is_zebra else None, Alignment(horizontal="center", vertical="center"), light_border)
             
             # Remarks
-            status_str = r["status"].upper()
-            ws.cell(row=row_idx, column=rem_col, value=r["status"])
+            status_raw = str(r["status"]).upper()
+            abbrev_status = format_class_status(r["status"])
+            ws.cell(row=row_idx, column=rem_col, value=abbrev_status)
             
             rem_fill = None
             rem_font = data_font
-            if "FAIL" in status_str:
+            if abbrev_status == "F" or "FAIL" in status_raw:
                 rem_fill = red_fill
                 rem_font = Font(name="Segoe UI", size=10, bold=True, color="9C0006")
-            elif any(c in status_str for c in ["DISTINCTION", "FIRST CLASS", "SECOND", "PASS"]):
+            elif abbrev_status in ["FCD", "FC", "SC", "P", "PASS"] or any(c in status_raw for c in ["DISTINCTION", "FIRST CLASS", "SECOND", "PASS"]):
                 rem_fill = green_fill
                 rem_font = Font(name="Segoe UI", size=10, bold=True, color="006100")
-            elif "ABSENT" in status_str:
+            elif abbrev_status in ["AB", "A"] or "ABSENT" in status_raw:
                 rem_fill = yellow_fill
                 rem_font = Font(name="Segoe UI", size=10, bold=True, color="9C6500")
                 
-            style_cells(row_idx, rem_col, row_idx, rem_col, rem_font, rem_fill or (zebra_fill if is_zebra else None), Alignment(horizontal="center"), light_border)
+            style_cells(row_idx, rem_col, row_idx, rem_col, rem_font, rem_fill or (zebra_fill if is_zebra else None), Alignment(horizontal="center", vertical="center"), light_border)
             
             # No. of Backlogs
             ws.cell(row=row_idx, column=back_col, value=backlogs)
             back_font = Font(name="Segoe UI", size=10, bold=True, color="9C0006") if backlogs > 0 else data_font
             back_fill = red_fill if backlogs > 0 else (zebra_fill if is_zebra else None)
-            style_cells(row_idx, back_col, row_idx, back_col, back_font, back_fill, Alignment(horizontal="center"), light_border)
+            style_cells(row_idx, back_col, row_idx, back_col, back_font, back_fill, Alignment(horizontal="center", vertical="center"), light_border)
 
         # Add Color Format Key / Legend Box for clear reference by external users
         legend_start_row = 5 + len(self.records) + 2
@@ -526,17 +554,17 @@ class ResultAnalyzer:
         
         # Legend Item 1: Soft Green (PASS / DISTINCTION)
         ws.merge_cells(start_row=legend_start_row+1, start_column=1, end_row=legend_start_row+1, end_column=3)
-        ws.cell(row=legend_start_row+1, column=1, value="PASS / FIRST CLASS / DISTINCTION")
+        ws.cell(row=legend_start_row+1, column=1, value="FCD (DISTINCTION) / FC (FIRST CLASS) / SC / P (PASS)")
         style_cells(legend_start_row+1, 1, legend_start_row+1, 3, Font(name="Segoe UI", size=9, bold=True, color="006100"), green_fill, Alignment(horizontal="center", vertical="center"), thin_border)
 
         # Legend Item 2: Soft Red (FAIL / BACKLOG)
         ws.merge_cells(start_row=legend_start_row+1, start_column=4, end_row=legend_start_row+1, end_column=6)
-        ws.cell(row=legend_start_row+1, column=4, value="FAILED SUBJECT / FAIL RESULT / BACKLOG")
+        ws.cell(row=legend_start_row+1, column=4, value="F (FAIL) / FAILED SUBJECT / BACKLOG")
         style_cells(legend_start_row+1, 4, legend_start_row+1, 6, Font(name="Segoe UI", size=9, bold=True, color="9C0006"), red_fill, Alignment(horizontal="center", vertical="center"), thin_border)
 
         # Legend Item 3: Soft Yellow (SPECIAL STATUS)
         ws.merge_cells(start_row=legend_start_row+1, start_column=7, end_row=legend_start_row+1, end_column=12)
-        ws.cell(row=legend_start_row+1, column=7, value="SPECIAL STATUS (A: ABSENT | W: WITHHELD | NE: NOT ELIGIBLE | NA: NOT APPLICABLE)")
+        ws.cell(row=legend_start_row+1, column=7, value="SPECIAL STATUS (AB: ABSENT | W: WITHHELD | NE: NOT ELIGIBLE | NA: NOT APPLICABLE)")
         style_cells(legend_start_row+1, 7, legend_start_row+1, 12, Font(name="Segoe UI", size=9, bold=True, color="9C6500"), yellow_fill, Alignment(horizontal="center", vertical="center"), thin_border)
             
         # Column widths
@@ -583,7 +611,7 @@ class ResultAnalyzer:
             "Score": t["total_marks"],
             "Max Score": t["max_marks"],
             "Percentage (%)": t["percentage"],
-            "Class": t["status"]
+            "Class": format_class_status(t["status"])
         } for t in analysis["toppers"]])
         
         df_fails = pd.DataFrame([{
@@ -639,10 +667,12 @@ class ResultAnalyzer:
             # Show grid lines explicitly
             ws.views.sheetView[0].showGridLines = True
             
-            # Format title or metadata inside the sheet if needed
+            # Format title inside sheet merged across top
             ws.insert_rows(1, 2)
-            ws["A1"] = f"VTU BATCH RESULT ANALYSIS - {name.upper()}"
+            ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=ws.max_column)
+            ws["A1"] = f"VTU RESULT ANALYSIS - {name.upper()}"
             ws["A1"].font = title_font
+            ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
             ws.row_dimensions[1].height = 25
             
             # Readjust all other row dimensions
@@ -665,7 +695,7 @@ class ResultAnalyzer:
                     cell = ws.cell(row=row, column=col)
                     cell.font = data_font
                     cell.border = thin_border
-                    cell.alignment = Alignment(vertical="center")
+                    cell.alignment = Alignment(horizontal="center", vertical="center")
                     
                     # Apply zebra striping
                     if is_zebra:
@@ -692,11 +722,11 @@ class ResultAnalyzer:
                             cell.fill = red_fill
                             cell.font = Font(name="Segoe UI", size=11, bold=True, color="C00000")
                             cell.alignment = Alignment(horizontal="center", vertical="center")
-                        elif val_upper in ["PASS", "P", "PASS CLASS", "FIRST CLASS", "FIRST CLASS WITH DISTINCTION", "SECOND CLASS"]:
+                        elif val_upper in ["PASS", "P", "PASS CLASS", "FIRST CLASS", "FIRST CLASS WITH DISTINCTION", "SECOND CLASS", "FCD", "FC", "SC"]:
                             cell.fill = green_fill
                             cell.font = Font(name="Segoe UI", size=11, bold=True, color="375623")
                             cell.alignment = Alignment(horizontal="center", vertical="center")
-                        elif val_upper in ["ABSENT", "A"]:
+                        elif val_upper in ["ABSENT", "A", "AB"]:
                             cell.fill = yellow_fill
                             cell.font = Font(name="Segoe UI", size=11, bold=True, color="7F6000")
                             cell.alignment = Alignment(horizontal="center", vertical="center")
@@ -759,7 +789,7 @@ class ResultAnalyzer:
                 top=Side(style='thin', color='D3D3D3'),
                 bottom=Side(style='thin', color='D3D3D3')
             )
-            stats_ws[f"{col_let2}{row_idx}"].alignment = Alignment(horizontal="right")
+            stats_ws[f"{col_let2}{row_idx}"].alignment = Alignment(horizontal="center", vertical="center")
             
             if label == "Batch Pass %":
                 stats_ws[f"{col_let2}{row_idx}"].fill = green_fill

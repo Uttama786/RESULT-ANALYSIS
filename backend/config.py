@@ -20,3 +20,21 @@ if RAW_DB_URL.startswith("postgres://"):
     SQLALCHEMY_DATABASE_URL = RAW_DB_URL.replace("postgres://", "postgresql://", 1)
 else:
     SQLALCHEMY_DATABASE_URL = RAW_DB_URL
+
+# Indian Standard Time (IST - UTC+05:30) Configuration
+from datetime import datetime, timezone, timedelta
+
+try:
+    from zoneinfo import ZoneInfo
+    IST = ZoneInfo("Asia/Kolkata")
+except Exception:
+    IST = timezone(timedelta(hours=5, minutes=30))
+
+def get_ist_now() -> datetime:
+    """Returns the current datetime in Indian Standard Time (IST, UTC+05:30)."""
+    return datetime.now(IST)
+
+def get_ist_time_str(fmt: str = "%Y-%m-%d %H:%M:%S") -> str:
+    """Returns the formatted current IST date and time string."""
+    return get_ist_now().strftime(fmt)
+

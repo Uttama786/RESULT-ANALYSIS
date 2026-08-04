@@ -212,15 +212,12 @@ class FastHTTPScraper:
         return f"data:image/png;base64,{img_b64}"
 
     def submit_and_scrape(self, usn: str, captcha_input: str, parse_func) -> dict:
-        import datetime
-        if not self.session:
-            raise RuntimeError("requests library not available")
-
+        from config import get_ist_now
         action_url = self.form_action or self.portal_url
         
         # Build payload with hidden tokens (Token, js_token) required by VTU server
         payload = dict(getattr(self, "hidden_fields", {}))
-        year_str = str(datetime.datetime.now().year)
+        year_str = str(get_ist_now().year)
         payload["js_token"] = base64.b64encode(f"student_access_{year_str}".encode()).decode("utf-8")
         payload[self.usn_field] = usn
         payload[self.captcha_field] = captcha_input
@@ -346,6 +343,8 @@ class VTUScraper:
             chrome_options.add_argument("--disable-gpu")
             chrome_options.add_argument("--no-sandbox")
             chrome_options.add_argument("--disable-dev-shm-usage")
+            chrome_options.add_argument("--disable-extensions")
+            chrome_options.add_argument("--dns-prefetch-disable")
             chrome_options.add_argument("--disable-blink-features=AutomationControlled")
             chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
             
@@ -382,10 +381,10 @@ class VTUScraper:
             self.driver.set_page_load_timeout(timeout)
             self.driver.get(url)
         except Exception as e:
-            logger.warning(f"Page load timeout/glitch on {url}: {e}. Stopping background loading and proceeding with available DOM...")
+            logger.warning(f"VTU portal server slow response on {url}: Stopping background loading and proceeding with available DOM...")
             try:
                 self.driver.execute_script("window.stop();")
-                time.sleep(0.3)
+                time.sleep(0.2)
             except Exception:
                 pass
 

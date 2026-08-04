@@ -14,14 +14,23 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from pydantic import BaseModel
 
-from config import DATA_DIR, EXPORTS_DIR, TEMPLATES_DIR
+from config import DATA_DIR, EXPORTS_DIR, TEMPLATES_DIR, IST, get_ist_now, get_ist_time_str
 from database import Base, engine, SessionLocal, upgrade_db_schema
 from models import User, History
 from scraper import VTUScraper, solve_captcha_ocr_base64
 from analyzer import ResultAnalyzer
 
-# Set up logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+# Set up logging in Indian Standard Time (IST)
+class ISTFormatter(logging.Formatter):
+    def formatTime(self, record, datefmt=None):
+        dt = datetime.fromtimestamp(record.created, tz=IST)
+        if datefmt:
+            return dt.strftime(datefmt)
+        return dt.strftime("%Y-%m-%d %H:%M:%S IST")
+
+log_handler = logging.StreamHandler()
+log_handler.setFormatter(ISTFormatter("%(asctime)s - %(levelname)s - %(message)s"))
+logging.basicConfig(level=logging.INFO, handlers=[log_handler])
 logger = logging.getLogger(__name__)
 
 # Initialize database tables and auto-migrate missing columns
@@ -89,7 +98,7 @@ def migrate_json_to_db():
                             email=u.get("email", ""),
                             role=u.get("role", "student"),
                             department=u.get("department", ""),
-                            created_at=u.get("created_at", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+                            created_at=u.get("created_at", get_ist_time_str())
                         )
                         db.add(db_user)
                         migrated_count += 1
@@ -148,7 +157,7 @@ def ensure_default_admin():
                 email="uttamabhise@gmail.com",
                 role="admin",
                 department="Computer Science & Engineering",
-                created_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                created_at=get_ist_time_str()
             )
             db.add(default_admin)
             db.commit()
@@ -281,7 +290,7 @@ def add_history_entry(user_id: str, username: str, session_id: str, excel_path: 
             user_id=user_id,
             username=username,
             session_id=session_id,
-            timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            timestamp=get_ist_time_str(),
             usn_count=usn_count,
             usn_range_summary=usn_range_summary,
             excel_file=file_name,
@@ -507,7 +516,7 @@ def admin_create_user(req: UserRegisterRequest, token: str = Query(default=""), 
             email=req.email.strip(),
             role=role,
             department=department,
-            created_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            created_at=get_ist_time_str()
         )
         db.add(new_user)
         db.commit()
@@ -639,7 +648,7 @@ def login_user(req: UserLoginRequest):
             "department": user.get("department", ""),
             "full_name": full_name,
             "email": user.get("email", ""),
-            "created_at": datetime.now().isoformat()
+            "created_at": get_ist_now().isoformat()
         }
     
     logger.info(f"🔑 User logged in: {user['username']} ({role}) [Token: {token[:8]}...]")
@@ -1322,7 +1331,7 @@ def submit_feedback(feedback: FeedbackRequest):
         
     entry = {
         "id": str(uuid.uuid4()),
-        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "timestamp": get_ist_time_str(),
         "name": feedback.name.strip() or "Anonymous User",
         "email": feedback.email.strip(),
         "category": feedback.category,
